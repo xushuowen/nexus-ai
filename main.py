@@ -209,5 +209,5 @@ async def api_chat(request: Request):
 if __name__ == "__main__":
     import uvicorn
     host = config.get("app.host", "0.0.0.0")
-    port = config.get("app.port", 8000)
+    port = int(os.getenv("PORT", config.get("app.port", 8000)))
     uvicorn.run("nexus.main:app", host=host, port=port, reload=False)
