@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ app_name }} - Neural Interface</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Animated background -->
+    <canvas id="hex-bg"></canvas>
+    <div id="scan-line"></div>
+
+    <div id="app">
+        <!-- ═══ Top HUD Bar (SAO-style) ═══ -->
+        <header id="hud-bar">
+            <div class="hud-left">
+                <div class="player-icon">
+                    <svg viewBox="0 0 40 40" class="icon-diamond">
+                        <polygon points="20,2 38,20 20,38 2,20" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                        <polygon points="20,8 32,20 20,32 8,20" fill="currentColor" opacity="0.15"/>
+                        <circle cx="20" cy="20" r="5" fill="currentColor" opacity="0.6"/>
+                    </svg>
+                </div>
+                <div class="player-info">
+                    <span class="player-name">{{ app_name }}</span>
+                    <span class="player-title">Multi-Agent Neural System</span>
+                </div>
+                <div class="status-badge" id="status-badge">
+                    <span class="status-pulse"></span>
+                    <span class="status-text">ONLINE</span>
+                </div>
+            </div>
+            <div class="hud-right">
+                <!-- Token Budget as MP Bar -->
+                <div class="stat-bar-group">
+                    <div class="stat-bar">
+                        <span class="stat-label">TP</span>
+                        <div class="bar-track">
+                            <div class="bar-fill tp-fill" id="budget-fill"></div>
+                        </div>
+                        <span class="stat-value" id="budget-text">50,000</span>
+                    </div>
+                    <div class="stat-bar">
+                        <span class="stat-label">REQ</span>
+                        <div class="bar-track">
+                            <div class="bar-fill req-fill" id="req-fill"></div>
+                        </div>
+                        <span class="stat-value" id="req-text">0</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- ═══ Main Layout ═══ -->
+        <div id="main">
+            <!-- ── Left Panel: Agent/Skill List (SAO Menu) ── -->
+            <aside id="skill-panel">
+                <div class="panel-frame">
+                    <div class="panel-header">
+                        <svg viewBox="0 0 20 20" class="panel-icon"><polygon points="10,1 19,10 10,19 1,10"/></svg>
+                        <span>SKILL LIST</span>
+                    </div>
+                    <div class="panel-body" id="skill-list">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Thinking Process (Great Sage Style) -->
+                <div class="panel-frame sage-panel">
+                    <div class="panel-header sage-header">
+                        <svg viewBox="0 0 20 20" class="panel-icon"><polygon points="10,1 19,10 10,19 1,10"/></svg>
+                        <span>ANALYSIS LOG</span>
+                        <span class="sage-tag">大賢者</span>
+                    </div>
+                    <div class="panel-body" id="thinking-log">
+                        <!-- Thinking entries appear here -->
+                    </div>
+                </div>
+            </aside>
+
+            <!-- ── Center: Chat Area ── -->
+            <main id="chat-area">
+                <div id="messages">
+                    <!-- Welcome message -->
+                    <div class="sage-notification" id="welcome-msg">
+                        <div class="sage-notify-border">
+                            <div class="sage-notify-content">
+                                <div class="sage-notify-title">System Initialized</div>
+                                <div class="sage-notify-body">Neural link established. All agents operational.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Input Area -->
+                <div id="input-area">
+                    <div class="input-frame">
+                        <div class="input-glow"></div>
+                        <textarea id="user-input" placeholder="Enter command..." rows="2"></textarea>
+                        <button id="send-btn" onclick="sendMessage()">
+                            <svg viewBox="0 0 24 24" width="20" height="20">
+                                <path d="M2 21l21-9L2 3v7l15 2-15 2z" fill="currentColor"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </main>
+
+            <!-- ── Right Panel: Status & Info ── -->
+            <aside id="status-panel">
+                <div class="panel-frame">
+                    <div class="panel-header">
+                        <svg viewBox="0 0 20 20" class="panel-icon"><polygon points="10,1 19,10 10,19 1,10"/></svg>
+                        <span>STATUS</span>
+                    </div>
+                    <div class="panel-body">
+                        <div class="status-grid">
+                            <div class="status-item">
+                                <span class="si-label">Agents</span>
+                                <span class="si-value" id="agent-count">9</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="si-label">Memory</span>
+                                <span class="si-value" id="memory-status">Active</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="si-label">Session</span>
+                                <span class="si-value" id="session-id">--</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="si-label">Uptime</span>
+                                <span class="si-value" id="uptime">00:00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Agent Display -->
+                <div class="panel-frame">
+                    <div class="panel-header">
+                        <svg viewBox="0 0 20 20" class="panel-icon"><polygon points="10,1 19,10 10,19 1,10"/></svg>
+                        <span>ACTIVE PROCESS</span>
+                    </div>
+                    <div class="panel-body" id="active-agent">
+                        <div class="agent-idle">
+                            <div class="idle-diamond">
+                                <svg viewBox="0 0 40 40">
+                                    <polygon points="20,2 38,20 20,38 2,20" fill="none" stroke="currentColor" stroke-width="1"/>
+                                </svg>
+                            </div>
+                            <span>Awaiting Input</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Budget Detail -->
+                <div class="panel-frame">
+                    <div class="panel-header">
+                        <svg viewBox="0 0 20 20" class="panel-icon"><polygon points="10,1 19,10 10,19 1,10"/></svg>
+                        <span>TOKEN POOL</span>
+                    </div>
+                    <div class="panel-body">
+                        <div class="token-pool">
+                            <div class="pool-ring" id="pool-ring">
+                                <svg viewBox="0 0 100 100">
+                                    <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(0,200,255,0.1)" stroke-width="4"/>
+                                    <circle cx="50" cy="50" r="42" fill="none" stroke="var(--accent)" stroke-width="4"
+                                            stroke-dasharray="264" stroke-dashoffset="264" id="pool-circle"
+                                            stroke-linecap="round" transform="rotate(-90 50 50)"/>
+                                </svg>
+                                <div class="pool-center">
+                                    <span class="pool-pct" id="pool-pct">100%</span>
+                                    <span class="pool-sub">remaining</span>
+                                </div>
+                            </div>
+                            <div class="pool-stats">
+                                <div><span class="ps-label">Used</span><span class="ps-val" id="tokens-used">0</span></div>
+                                <div><span class="ps-label">Limit</span><span class="ps-val" id="tokens-limit">50,000</span></div>
+                                <div><span class="ps-label">Requests</span><span class="ps-val" id="req-count">0</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <!-- Skill Activation Overlay (Slime-style notification) -->
+    <div id="skill-overlay" class="skill-overlay hidden">
+        <div class="skill-activate">
+            <div class="skill-activate-diamond"></div>
+            <div class="skill-activate-text">
+                <div class="skill-activate-label">Skill Activated</div>
+                <div class="skill-activate-name" id="skill-activate-name"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

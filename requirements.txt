@@ -1,0 +1,22 @@
+# Nexus AI Dependencies
+# Core
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-dotenv>=1.0.0
+pyyaml>=6.0
+litellm>=1.0.0
+jinja2>=3.1.0
+httpx>=0.25.0
+
+# Memory
+chromadb>=0.4.0
+networkx>=3.0
+
+# Optional: better web scraping
+beautifulsoup4>=4.12.0
+
+# Telegram bot
+python-telegram-bot>=20.0
+
+# Optional: Playwright for browser tool
+# playwright>=1.40.0

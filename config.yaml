@@ -1,0 +1,80 @@
+# Project Nexus Configuration
+app:
+  name: "Nexus AI"
+  version: "0.1.0"
+  host: "0.0.0.0"
+  port: 8000
+  debug: true
+
+budget:
+  daily_limit_tokens: 50000
+  per_request_max_tokens: 2000
+  curiosity_daily_ops: 10
+  curiosity_per_op_tokens: 500
+  warning_threshold: 0.8
+  hard_stop: true
+  reset_hour: 0
+
+memory:
+  working_memory_slots: 7
+  episodic_max_entries: 1000
+  semantic_decay_rate: 0.01
+  hebbian_learning_rate: 0.1
+  consolidation_interval_minutes: 30
+  vector_store_path: "./data/chroma"
+  sqlite_path: "./data/nexus.db"
+
+orchestrator:
+  max_parallel_hypotheses: 3
+  confidence_threshold: 0.7
+  auto_prune_below: 0.3
+  simple_question_threshold: 0.85
+
+providers:
+  primary: "groq-llama"
+  fallback: "gemini-flash"
+  models:
+    groq-llama:
+      model_id: "groq/llama-3.3-70b-versatile"
+      max_tokens: 2000
+      temperature: 0.7
+      use_for: ["routing", "simple_tasks", "classification", "general"]
+    groq-mixtral:
+      model_id: "groq/mixtral-8x7b-32768"
+      max_tokens: 2000
+      temperature: 0.7
+      use_for: ["code_generation"]
+    gemini-flash:
+      model_id: "gemini/gemini-2.0-flash-exp"
+      max_tokens: 2000
+      temperature: 0.7
+      use_for: ["complex_reasoning", "analysis"]
+    gemini-pro:
+      model_id: "gemini/gemini-1.5-pro-latest"
+      max_tokens: 4000
+      temperature: 0.7
+      use_for: []
+
+security:
+  sandbox_enabled: true
+  allowed_paths:
+    - "./data"
+    - "./workspace"
+  blocked_commands:
+    - "rm -rf /"
+    - "format"
+    - "del /f /s /q"
+  rate_limit_per_minute: 30
+
+gateway:
+  telegram:
+    enabled: true
+    token: ""
+  web:
+    enabled: true
+  api:
+    enabled: true
+
+logging:
+  level: "INFO"
+  file: "./data/nexus.log"
