@@ -40,6 +40,33 @@ registry: AgentRegistry | None = None
 memory: HybridMemory | None = None
 telegram: TelegramChannel | None = None
 active_websockets: list[WebSocket] = []
+_init_complete = False
+
+
+async def _deferred_init(llm, mem, orch, tg, bdg):
+    """Initialize heavy components in background so the app starts fast."""
+    global _init_complete
+    try:
+        # This is the slow part (ChromaDB downloads ONNX model ~79MB on first run)
+        logger.info("Background init: starting memory system...")
+        await mem.initialize()
+        logger.info("Background init: memory ready")
+
+        orch.set_memory(mem)
+
+        # Start Telegram bot
+        tg.set_orchestrator(orch)
+        tg.set_memory(mem)
+        tg.set_budget(bdg)
+        try:
+            await tg.start()
+        except Exception as e:
+            logger.warning(f"Telegram start failed: {e}")
+
+        _init_complete = True
+        logger.info("Background init: all systems operational!")
+    except Exception as e:
+        logger.error(f"Background init failed: {e}", exc_info=True)
 
 
 @asynccontextmanager
@@ -51,13 +78,12 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 50)
     config.data_dir()  # ensure data dir exists
 
-    # Initialize components
+    # Initialize lightweight components immediately
     budget = BudgetController()
     router = ModelRouter()
     llm = LLMProvider(budget, router)
     registry = AgentRegistry()
     memory = HybridMemory()
-    await memory.initialize()
 
     # Auto-discover agents and inject dependencies
     await registry.auto_discover()
@@ -72,7 +98,6 @@ async def lifespan(app: FastAPI):
     logger.info(f"Loaded {len(registry.list_agents())} agents: {[a.name for a in registry.list_agents()]}")
 
     orchestrator = Orchestrator(budget, llm, router, registry)
-    orchestrator.set_memory(memory)
 
     # Broadcast events to all connected WebSockets
     async def broadcast_event(event: StreamEvent):
@@ -93,20 +118,17 @@ async def lifespan(app: FastAPI):
 
     orchestrator.on_event(broadcast_event)
 
-    # Start Telegram bot
     telegram = TelegramChannel()
-    telegram.set_orchestrator(orchestrator)
-    telegram.set_memory(memory)
-    telegram.set_budget(budget)
-    try:
-        await telegram.start()
-    except Exception as e:
-        logger.warning(f"Telegram start failed: {e}")
 
+    port = int(os.getenv("PORT", config.get("app.port", 8000)))
     logger.info("=" * 50)
-    logger.info("  Nexus AI ready!")
-    logger.info(f"  Web UI: http://localhost:{config.get('app.port', 8000)}")
+    logger.info("  Nexus AI accepting requests!")
+    logger.info(f"  Web UI: http://localhost:{port}")
+    logger.info("  Heavy init running in background...")
     logger.info("=" * 50)
+
+    # Start heavy initialization in background (ChromaDB, Telegram, etc.)
+    asyncio.create_task(_deferred_init(llm, memory, orchestrator, telegram, budget))
 
     yield
 
@@ -151,6 +173,15 @@ async def websocket_endpoint(ws: WebSocket):
             if not user_input.strip():
                 continue
 
+            if not _init_complete:
+                await ws.send_text(json.dumps({
+                    "type": "final_answer",
+                    "stream": "orchestrator",
+                    "content": "System is still initializing, please wait a moment...",
+                    "metadata": {},
+                }))
+                continue
+
             # Process through orchestrator
             try:
                 async for event in orchestrator.process(user_input, session_id):
@@ -177,6 +208,7 @@ async def websocket_endpoint(ws: WebSocket):
 async def api_status():
     return {
         "status": "running",
+        "init_complete": _init_complete,
         "budget": budget.get_status() if budget else {},
         "agents": [a.name for a in registry.list_agents()] if registry else [],
         "telegram": telegram._running if telegram else False,
@@ -185,6 +217,9 @@ async def api_status():
 
 @app.post("/api/chat")
 async def api_chat(request: Request):
+    if not _init_complete:
+        return {"answer": "System is still initializing...", "events": [], "budget": {}}
+
     body = await request.json()
     user_input = body.get("content", "")
     session_id = body.get("session_id", "default")
