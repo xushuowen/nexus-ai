@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from nexus.skills.skill_base import BaseSkill, SkillResult
@@ -10,7 +11,7 @@ from nexus.skills.skill_base import BaseSkill, SkillResult
 class WebSearchSkill(BaseSkill):
     name = "web_search"
     description = "網路搜尋 — 使用 DuckDuckGo（免費，不需要 API key）"
-    triggers = ["搜尋", "search", "查一下", "google", "找一下", "look up"]
+    triggers = ["搜尋", "search", "查一下", "google", "找一下", "look up", "查詢"]
     category = "web"
     requires_llm = False
 
@@ -44,35 +45,47 @@ class WebSearchSkill(BaseSkill):
             if not results:
                 return SkillResult(content=f"搜尋「{query}」沒有找到結果。", success=True, source=self.name)
 
-            lines = [f"🔍 搜尋「{query}」的結果：\n"]
-            for title, snippet in results[:5]:
-                lines.append(f"**{title}**\n{snippet}\n")
+            lines = [f"🔍 搜尋「{query}」找到 {len(results)} 筆結果：\n"]
+            for i, (title, snippet, link) in enumerate(results[:5], 1):
+                lines.append(f"**{i}. {title}**")
+                if link:
+                    lines.append(f"   🔗 {link}")
+                if snippet:
+                    lines.append(f"   {snippet}")
+                lines.append("")
 
             return SkillResult(content="\n".join(lines), success=True, source=self.name)
 
         except Exception as e:
             return SkillResult(content=f"搜尋失敗: {e}", success=False, source=self.name)
 
-    def _parse_results(self, html: str) -> list[tuple[str, str]]:
-        """Parse DuckDuckGo HTML results."""
+    def _parse_results(self, html: str) -> list[tuple[str, str, str]]:
+        """Parse DuckDuckGo HTML results. Returns (title, snippet, url)."""
         results = []
         try:
             from bs4 import BeautifulSoup
             soup = BeautifulSoup(html, "html.parser")
-            for result in soup.select(".result")[:5]:
+            for result in soup.select(".result")[:8]:
                 title_el = result.select_one(".result__a")
                 snippet_el = result.select_one(".result__snippet")
+                url_el = result.select_one(".result__url")
                 if title_el:
                     title = title_el.get_text(strip=True)
                     snippet = snippet_el.get_text(strip=True) if snippet_el else ""
-                    results.append((title, snippet))
+                    link = url_el.get_text(strip=True) if url_el else ""
+                    if link and not link.startswith("http"):
+                        link = "https://" + link
+                    results.append((title, snippet, link))
         except ImportError:
             # Fallback: basic regex extraction
-            import re
             titles = re.findall(r'class="result__a"[^>]*>(.*?)</a>', html)
             snippets = re.findall(r'class="result__snippet"[^>]*>(.*?)</[^>]+>', html)
-            for i, title in enumerate(titles[:5]):
+            urls = re.findall(r'class="result__url"[^>]*>(.*?)</[^>]+>', html)
+            for i, title in enumerate(titles[:8]):
                 title = re.sub(r'<[^>]+>', '', title).strip()
                 snippet = re.sub(r'<[^>]+>', '', snippets[i]).strip() if i < len(snippets) else ""
-                results.append((title, snippet))
+                link = re.sub(r'<[^>]+>', '', urls[i]).strip() if i < len(urls) else ""
+                if link and not link.startswith("http"):
+                    link = "https://" + link
+                results.append((title, snippet, link))
         return results
