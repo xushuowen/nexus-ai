@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from typing import Any
 
 from nexus.tools.tool_base import BaseTool, ToolParameter, ToolResult
-from nexus import config
+from nexus.security.filesystem_scope import FilesystemScope
+
+# Shared scope checker
+_scope = FilesystemScope()
 
 
 class FileReadTool(BaseTool):
@@ -22,21 +23,16 @@ class FileReadTool(BaseTool):
     async def execute(self, **kwargs) -> ToolResult:
         path = kwargs.get("path", "")
         max_lines = kwargs.get("max_lines", 200)
-        if not self._is_allowed(path):
-            return ToolResult(success=False, output="", error="Path not in allowed scope")
+
+        ok, reason = _scope.check_read(path)
+        if not ok:
+            return ToolResult(success=False, output="", error=reason)
+
         try:
-            p = Path(path)
-            if not p.exists():
-                return ToolResult(success=False, output="", error="File not found")
-            lines = p.read_text(encoding="utf-8", errors="replace").splitlines()[:max_lines]
+            lines = Path(path).read_text(encoding="utf-8", errors="replace").splitlines()[:max_lines]
             return ToolResult(success=True, output="\n".join(lines))
         except Exception as e:
             return ToolResult(success=False, output="", error=str(e))
-
-    def _is_allowed(self, path: str) -> bool:
-        allowed = config.get("security.allowed_paths", ["./data", "./workspace"])
-        abs_path = str(Path(path).resolve())
-        return any(abs_path.startswith(str(Path(a).resolve())) for a in allowed)
 
 
 class FileWriteTool(BaseTool):
@@ -54,21 +50,20 @@ class FileWriteTool(BaseTool):
         path = kwargs.get("path", "")
         content = kwargs.get("content", "")
         append = kwargs.get("append", False)
-        if not self._is_allowed(path):
-            return ToolResult(success=False, output="", error="Path not in allowed scope")
+
+        ok, reason = _scope.check_write(path)
+        if not ok:
+            return ToolResult(success=False, output="", error=reason)
+
         try:
             p = Path(path)
             p.parent.mkdir(parents=True, exist_ok=True)
             mode = "a" if append else "w"
-            p.write_text(content, encoding="utf-8") if not append else p.open(mode, encoding="utf-8").write(content)
+            with p.open(mode, encoding="utf-8") as f:
+                f.write(content)
             return ToolResult(success=True, output=f"Written to {path}")
         except Exception as e:
             return ToolResult(success=False, output="", error=str(e))
-
-    def _is_allowed(self, path: str) -> bool:
-        allowed = config.get("security.allowed_paths", ["./data", "./workspace"])
-        abs_path = str(Path(path).resolve())
-        return any(abs_path.startswith(str(Path(a).resolve())) for a in allowed)
 
 
 class FileSearchTool(BaseTool):
@@ -83,6 +78,10 @@ class FileSearchTool(BaseTool):
     async def execute(self, **kwargs) -> ToolResult:
         pattern = kwargs.get("pattern", "*")
         directory = kwargs.get("directory", "./workspace")
+
+        if not _scope.is_allowed(directory):
+            return ToolResult(success=False, output="", error=f"Directory {directory} is outside allowed scope")
+
         try:
             p = Path(directory)
             if not p.exists():

@@ -4,11 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import shlex
 
 from nexus.tools.tool_base import BaseTool, ToolParameter, ToolResult
 from nexus import config
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_ALLOWLIST = [
+    "ls", "dir", "cat", "head", "tail", "echo", "pwd", "whoami", "date",
+    "python", "python3", "pip", "pip3", "node", "npm", "npx",
+    "git", "curl", "wget", "which", "where", "find", "grep",
+    "wc", "sort", "uniq", "diff", "file", "tree",
+]
 
 
 class ShellTool(BaseTool):
@@ -22,23 +31,33 @@ class ShellTool(BaseTool):
     ]
 
     def __init__(self) -> None:
-        self._blocked: list[str] = []
+        self._allowlist: list[str] = []
 
     async def initialize(self) -> None:
-        self._blocked = config.get("security.blocked_commands", [])
+        env_list = os.getenv("NEXUS_SHELL_ALLOWLIST", "")
+        if env_list:
+            self._allowlist = [c.strip() for c in env_list.split(",") if c.strip()]
+        else:
+            self._allowlist = config.get("security.shell_allowlist", DEFAULT_ALLOWLIST)
 
     async def validate(self, **kwargs) -> str | None:
         base_err = await super().validate(**kwargs)
         if base_err:
             return base_err
-        cmd = kwargs.get("command", "").lower()
-        for blocked in self._blocked:
-            if blocked.lower() in cmd:
-                return f"Command contains blocked pattern: {blocked}"
-        dangerous = ["rm -rf /", "format", "mkfs", "dd if=", ":(){ :|:& };:"]
-        for d in dangerous:
-            if d in cmd:
-                return f"Dangerous command blocked"
+
+        command = kwargs.get("command", "")
+        try:
+            parts = shlex.split(command)
+        except ValueError:
+            return "Invalid command syntax"
+
+        if not parts:
+            return "Empty command"
+
+        executable = parts[0].lower().rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+        if executable not in self._allowlist:
+            return f"Command '{executable}' not in allowlist"
+
         return None
 
     async def execute(self, **kwargs) -> ToolResult:
@@ -46,8 +65,13 @@ class ShellTool(BaseTool):
         timeout = kwargs.get("timeout", 30)
 
         try:
-            proc = await asyncio.create_subprocess_shell(
-                command,
+            args = shlex.split(command)
+        except ValueError as e:
+            return ToolResult(success=False, output="", error=f"Invalid command: {e}")
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *args,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(config.data_dir()),

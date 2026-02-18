@@ -4,12 +4,22 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import shlex
 from typing import Any
 
 from nexus.core.agent_base import AgentCapability, AgentMessage, AgentResult, BaseAgent
 from nexus import config
 
 logger = logging.getLogger(__name__)
+
+# Default safe command prefixes (allowlist approach)
+DEFAULT_ALLOWLIST = [
+    "ls", "dir", "cat", "head", "tail", "echo", "pwd", "whoami", "date",
+    "python", "python3", "pip", "pip3", "node", "npm", "npx",
+    "git", "curl", "wget", "which", "where", "find", "grep",
+    "wc", "sort", "uniq", "diff", "file", "tree",
+]
 
 
 class ShellAgent(BaseAgent):
@@ -20,11 +30,16 @@ class ShellAgent(BaseAgent):
 
     def __init__(self) -> None:
         super().__init__()
-        self._blocked_commands: list[str] = []
+        self._allowlist: list[str] = []
 
     async def initialize(self) -> None:
         await super().initialize()
-        self._blocked_commands = config.get("security.blocked_commands", [])
+        # Load allowlist from env or config
+        env_list = os.getenv("NEXUS_SHELL_ALLOWLIST", "")
+        if env_list:
+            self._allowlist = [c.strip() for c in env_list.split(",") if c.strip()]
+        else:
+            self._allowlist = config.get("security.shell_allowlist", DEFAULT_ALLOWLIST)
 
     def can_handle(self, message: AgentMessage, context: dict[str, Any]) -> float:
         text = message.content.lower()
@@ -32,21 +47,26 @@ class ShellAgent(BaseAgent):
                      "pip", "npm", "git", "ls", "dir", "cd"]
         return min(1.0, sum(0.15 for kw in keywords if kw in text))
 
-    def _is_safe(self, command: str) -> bool:
-        cmd_lower = command.lower().strip()
-        for blocked in self._blocked_commands:
-            if blocked.lower() in cmd_lower:
-                return False
-        # Block dangerous patterns
-        dangerous = ["rm -rf", "format c:", "del /f /s", ":(){ :|:& };:",
-                      "mkfs", "dd if=", "> /dev/sd"]
-        for d in dangerous:
-            if d in cmd_lower:
-                return False
-        return True
+    def _is_allowed(self, command: str) -> tuple[bool, str]:
+        """Check command against allowlist. Returns (allowed, reason)."""
+        try:
+            parts = shlex.split(command)
+        except ValueError:
+            return False, "Invalid command syntax"
+
+        if not parts:
+            return False, "Empty command"
+
+        executable = parts[0].lower()
+        # Strip path prefix (e.g. /usr/bin/python -> python)
+        executable = executable.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+
+        if executable not in self._allowlist:
+            return False, f"Command '{executable}' not in allowlist. Allowed: {', '.join(self._allowlist[:10])}..."
+
+        return True, ""
 
     async def process(self, message: AgentMessage, context: dict[str, Any]) -> AgentResult:
-        # Extract command from message
         command = self._extract_command(message.content)
         if not command:
             return AgentResult(
@@ -54,9 +74,10 @@ class ShellAgent(BaseAgent):
                 confidence=0.3, source_agent=self.name,
             )
 
-        if not self._is_safe(command):
+        allowed, reason = self._is_allowed(command)
+        if not allowed:
             return AgentResult(
-                content=f"Command blocked for safety: `{command}`",
+                content=f"Command blocked: {reason}",
                 confidence=0.9, source_agent=self.name,
             )
 
@@ -73,12 +94,10 @@ class ShellAgent(BaseAgent):
             )
 
     def _extract_command(self, text: str) -> str | None:
-        # Try "run: <cmd>" or "execute: <cmd>" patterns
         for prefix in ["run:", "execute:", "command:", "$", ">"]:
             if prefix in text.lower():
                 idx = text.lower().index(prefix) + len(prefix)
                 return text[idx:].strip()
-        # Try code blocks
         if "```" in text:
             parts = text.split("```")
             if len(parts) >= 2:
@@ -89,8 +108,14 @@ class ShellAgent(BaseAgent):
         return None
 
     async def _execute(self, command: str, timeout: int = 30) -> str:
-        proc = await asyncio.create_subprocess_shell(
-            command,
+        """Execute using subprocess_exec (not shell) for safety."""
+        try:
+            args = shlex.split(command)
+        except ValueError as e:
+            return f"Invalid command: {e}"
+
+        proc = await asyncio.create_subprocess_exec(
+            *args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(config.data_dir()),

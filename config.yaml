@@ -4,7 +4,7 @@ app:
   version: "0.1.0"
   host: "0.0.0.0"
   port: 8000
-  debug: true
+  debug: false
 
 budget:
   daily_limit_tokens: 50000

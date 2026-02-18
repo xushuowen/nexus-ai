@@ -37,6 +37,11 @@ class BrowserTool(BaseTool):
         if not url:
             return ToolResult(success=False, output="", error="URL is required")
 
+        from nexus.security.url_filter import is_url_safe
+        safe, reason = is_url_safe(url)
+        if not safe:
+            return ToolResult(success=False, output="", error=f"URL blocked: {reason}")
+
         if self._available:
             return await self._playwright_fetch(url, extract)
         return await self._httpx_fetch(url, extract)

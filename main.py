@@ -24,6 +24,9 @@ from nexus.providers.llm_provider import LLMProvider
 from nexus.providers.model_config import ModelRouter
 from nexus.memory.hybrid_store import HybridMemory
 from nexus.gateway.telegram_channel import TelegramChannel
+from nexus.security.auth import verify_request, verify_websocket, require_auth, get_api_key
+from nexus.security.rate_limiter import RateLimiter
+from nexus.skills.skill_loader import SkillLoader
 
 load_dotenv()
 
@@ -39,7 +42,9 @@ orchestrator: Orchestrator | None = None
 registry: AgentRegistry | None = None
 memory: HybridMemory | None = None
 telegram: TelegramChannel | None = None
+skill_loader: SkillLoader | None = None
 active_websockets: list[WebSocket] = []
+rate_limiter: RateLimiter | None = None
 _init_complete = False
 
 
@@ -71,7 +76,7 @@ async def _deferred_init(llm, mem, orch, tg, bdg):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global budget, orchestrator, registry, memory, telegram
+    global budget, orchestrator, registry, memory, telegram, rate_limiter, skill_loader
 
     logger.info("=" * 50)
     logger.info("  Starting Nexus AI...")
@@ -79,6 +84,7 @@ async def lifespan(app: FastAPI):
     config.data_dir()  # ensure data dir exists
 
     # Initialize lightweight components immediately
+    rate_limiter = RateLimiter()
     budget = BudgetController()
     router = ModelRouter()
     llm = LLMProvider(budget, router)
@@ -98,6 +104,13 @@ async def lifespan(app: FastAPI):
     logger.info(f"Loaded {len(registry.list_agents())} agents: {[a.name for a in registry.list_agents()]}")
 
     orchestrator = Orchestrator(budget, llm, router, registry)
+
+    # Initialize skill system
+    skill_loader = SkillLoader()
+    await skill_loader.auto_discover()
+    orchestrator.set_skill_loader(skill_loader)
+    skill_names = [s.name for s in skill_loader.list_skills()]
+    logger.info(f"Loaded {len(skill_names)} skills: {skill_names}")
 
     # Broadcast events to all connected WebSockets
     async def broadcast_event(event: StreamEvent):
@@ -136,6 +149,8 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down Nexus AI...")
     if telegram:
         await telegram.stop()
+    if skill_loader:
+        await skill_loader.shutdown_all()
     await registry.shutdown_all()
     if memory:
         await memory.close()
@@ -154,11 +169,16 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {
         "request": request,
         "app_name": config.get("app.name", "Nexus AI"),
+        "api_key": get_api_key() or "",
     })
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
+    if not verify_websocket(ws):
+        await ws.close(code=4001, reason="Unauthorized")
+        return
+
     await ws.accept()
     active_websockets.append(ws)
     logger.info(f"WebSocket connected. Total: {len(active_websockets)}")
@@ -211,12 +231,21 @@ async def api_status():
         "init_complete": _init_complete,
         "budget": budget.get_status() if budget else {},
         "agents": [a.name for a in registry.list_agents()] if registry else [],
+        "skills": [s.name for s in skill_loader.list_skills()] if skill_loader else [],
         "telegram": telegram._running if telegram else False,
     }
 
 
 @app.post("/api/chat")
 async def api_chat(request: Request):
+    require_auth(request)
+
+    if rate_limiter:
+        allowed, remaining = rate_limiter.check("api")
+        if not allowed:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=429, content={"error": "Rate limit exceeded"})
+
     if not _init_complete:
         return {"answer": "System is still initializing...", "events": [], "budget": {}}
 

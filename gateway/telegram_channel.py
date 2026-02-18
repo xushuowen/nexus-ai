@@ -27,6 +27,21 @@ class TelegramChannel:
         self._budget = None
         self._app = None
         self._running = False
+        # Whitelist: comma-separated chat IDs in env var
+        raw = os.getenv("TELEGRAM_ALLOWED_USERS", "").strip()
+        self._allowed_users: set[int] = set()
+        if raw:
+            for uid in raw.split(","):
+                uid = uid.strip()
+                if uid.isdigit():
+                    self._allowed_users.add(int(uid))
+            logger.info(f"Telegram whitelist: {self._allowed_users}")
+
+    def _is_user_allowed(self, chat_id: int) -> bool:
+        """Check if user is allowed. If no whitelist set, allow all."""
+        if not self._allowed_users:
+            return True
+        return chat_id in self._allowed_users
 
     def set_orchestrator(self, orchestrator) -> None:
         self._orchestrator = orchestrator
@@ -130,13 +145,20 @@ class TelegramChannel:
             session_id = f"tg_{chat_id}"
             if self._memory:
                 await self._memory.session.clear_session(session_id)
-            self._memory.working.clear()
+                self._memory.working.clear()
             await update.message.reply_text("🔄 對話已重置。")
 
         # ── Message handler ──
         async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             if not update.message or not update.message.text:
                 return
+
+            chat_id = update.effective_chat.id
+            if not self._is_user_allowed(chat_id):
+                await update.message.reply_text("⛔ 未授權的用戶。請聯繫管理員。")
+                logger.warning(f"Unauthorized Telegram user: {chat_id}")
+                return
+
             if not self._orchestrator:
                 await update.message.reply_text("⏳ 系統尚未就緒，請稍後再試。")
                 return

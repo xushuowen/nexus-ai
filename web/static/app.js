@@ -118,7 +118,9 @@ function renderSkillList() {
 // ═══ WebSocket Connection ═══
 function connectWebSocket() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${protocol}//${location.host}/ws`);
+    const apiKey = window.__NEXUS_API_KEY || '';
+    const keyParam = apiKey ? `?api_key=${apiKey}` : '';
+    ws = new WebSocket(`${protocol}//${location.host}/ws${keyParam}`);
 
     ws.onopen = () => {
         const badge = document.getElementById('status-badge');

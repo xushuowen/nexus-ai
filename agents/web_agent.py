@@ -51,7 +51,11 @@ class WebAgent(BaseAgent):
             )
 
     async def _fetch_url(self, url: str) -> str:
-        """Fetch URL content using httpx."""
+        """Fetch URL content using httpx (with SSRF protection)."""
+        from nexus.security.url_filter import is_url_safe
+        safe, reason = is_url_safe(url)
+        if not safe:
+            return f"URL blocked: {reason}"
         try:
             import httpx
             async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:

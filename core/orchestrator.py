@@ -1,11 +1,10 @@
-"""Brain: Multi-path reasoning orchestrator with live WebSocket streaming."""
+"""Brain: Multi-path reasoning orchestrator with skill-first routing."""
 
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
-import re
 import time
 from typing import Any, AsyncIterator
 
@@ -37,7 +36,7 @@ Your personality:
 System info:
 - You are running locally on the user's machine
 - You have a daily token budget, so you are efficient with your responses
-- You have 9 specialist agents (Coder, Reasoning, Research, Knowledge, File, Web, Shell, Vision, Optimizer) that can be activated for complex tasks"""
+- You have 9 specialist agents and multiple skills that can be activated for complex tasks"""
 
 # Keywords that suggest specialist agent routing is needed
 SPECIALIST_TRIGGERS = {
@@ -74,8 +73,7 @@ SPECIALIST_TRIGGERS = {
 
 
 class Orchestrator:
-    """Central brain that routes messages, manages multi-path reasoning,
-    and streams thinking process to the UI."""
+    """Central brain: skill-first → specialist agents → direct chat."""
 
     def __init__(
         self,
@@ -94,10 +92,14 @@ class Orchestrator:
         self.streams = ThreeStreamProcessor()
         self.max_hypotheses = config.get("orchestrator.max_parallel_hypotheses", 3)
         self._memory = None
+        self._skill_loader = None
         self._event_callbacks: list = []
 
     def set_memory(self, memory) -> None:
         self._memory = memory
+
+    def set_skill_loader(self, loader) -> None:
+        self._skill_loader = loader
 
     def on_event(self, callback) -> None:
         self._event_callbacks.append(callback)
@@ -117,7 +119,7 @@ class Orchestrator:
                 pass
 
     async def process(self, user_input: str, session_id: str = "default") -> AsyncIterator[StreamEvent]:
-        """Process user input through the full pipeline, yielding events."""
+        """Process user input: skills → agents → chat, yielding events."""
         ts = time.strftime("%H:%M:%S")
         await self._emit("received", f"[{ts}] Received: {user_input[:80]}")
 
@@ -143,9 +145,20 @@ class Orchestrator:
             except Exception as e:
                 logger.warning(f"Session load error: {e}")
 
-        # Step 4: Check if specialist agent is needed (local, 0 tokens)
-        specialist = self._detect_specialist(user_input)
+        # Step 4: Check skills first (Level 1 index match, 0 tokens)
+        if self._skill_loader:
+            skill = self._skill_loader.match(user_input)
+            if skill:
+                await self._emit("routing", f"[{ts}] Skill matched: {skill.name}")
+                result = await self._skill_path(user_input, skill, session_id)
+                yield StreamEvent("orchestrator", "final_answer", result.content)
+                await self._post_process(user_input, result, session_id)
+                status = self.budget.get_status()
+                await self._emit("budget_status", json.dumps(status))
+                return
 
+        # Step 5: Check specialist agents (keyword match, 0 tokens)
+        specialist = self._detect_specialist(user_input)
         if specialist:
             await self._emit("routing", f"[{ts}] Specialist detected: {specialist}")
             result = await self._specialist_path(user_input, specialist, history, session_id)
@@ -153,25 +166,39 @@ class Orchestrator:
             await self._emit("routing", f"[{ts}] Direct chat mode")
             result = await self._chat_path(user_input, history, session_id)
 
-        # Step 5: Yield final answer
+        # Step 6: Yield final answer
         logger.info(f"Final answer: {len(result.content)} chars, confidence={result.confidence}")
         await self._emit("generating", f"[{ts}] Response ready")
         yield StreamEvent("orchestrator", "final_answer", result.content)
 
-        # Step 6: Save assistant response to session
+        await self._post_process(user_input, result, session_id)
+
+        # Emit budget status
+        status = self.budget.get_status()
+        await self._emit("budget_status", json.dumps(status))
+
+    async def _post_process(self, user_input: str, result: AgentResult, session_id: str) -> None:
+        """Save response and remember interaction."""
         if self._memory:
             try:
                 await self._memory.session.add_message(session_id, "assistant", result.content)
             except Exception as e:
                 logger.warning(f"Session save error: {e}")
-
-        # Step 7: Remember interaction (async, don't block)
-        if self._memory:
             asyncio.create_task(self._remember(user_input, result))
 
-        # Emit budget status
-        status = self.budget.get_status()
-        await self._emit("budget_status", json.dumps(status))
+    async def _skill_path(self, user_input: str, skill, session_id: str) -> AgentResult:
+        """Execute a skill directly."""
+        await self._emit("routed", f"Skill: '{skill.name}' activated")
+
+        context = {"llm": self.llm, "memory": self._memory, "session_id": session_id}
+        result = await self._skill_loader.execute(skill, user_input, context)
+
+        return AgentResult(
+            content=result.content,
+            confidence=0.9 if result.success else 0.3,
+            source_agent=f"skill:{skill.name}",
+            metadata=result.metadata,
+        )
 
     def _detect_specialist(self, user_input: str) -> str | None:
         """Detect if a specialist agent is needed using keyword matching (0 tokens)."""
@@ -182,7 +209,6 @@ class Orchestrator:
             if count >= 2:
                 scores[agent_name] = count
             elif count == 1 and len(text.split()) <= 5:
-                # Short messages with 1 keyword: might be a specialist request
                 scores[agent_name] = count
 
         if not scores:
@@ -195,7 +221,6 @@ class Orchestrator:
         """Direct chat: send conversation history + new message to LLM."""
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-        # Add memory context if available
         memory_context = await self._get_memory_context(user_input)
         if memory_context:
             messages.append({
@@ -203,28 +228,18 @@ class Orchestrator:
                 "content": f"Relevant memories:\n{memory_context}",
             })
 
-        # Add conversation history (exclude the last message which is the current one)
-        # History already includes the current user message we just saved
         for msg in history[:-1]:
             messages.append(msg)
-
-        # Add current user message
         messages.append({"role": "user", "content": user_input})
 
         try:
             content = await self.llm.complete_chat(
-                messages=messages,
-                task_type="general",
-                source="chat",
+                messages=messages, task_type="general", source="chat",
             )
             return AgentResult(content=content, confidence=0.8, source_agent="chat")
         except Exception as e:
             logger.error(f"Chat path error: {e}", exc_info=True)
-            return AgentResult(
-                content=f"抱歉，處理時發生錯誤: {e}",
-                confidence=0.0,
-                source_agent="error",
-            )
+            return AgentResult(content=f"抱歉，處理時發生錯誤: {e}", confidence=0.0, source_agent="error")
 
     async def _specialist_path(
         self, user_input: str, agent_name: str, history: list[dict], session_id: str
@@ -237,11 +252,10 @@ class Orchestrator:
             logger.warning(f"Agent '{agent_name}' not found, falling back to chat")
             return await self._chat_path(user_input, history, session_id)
 
-        # Build context for the agent
         memory_context = await self._get_memory_context(user_input)
         recent_history = ""
         if history:
-            recent = history[-6:]  # Last 3 exchanges
+            recent = history[-6:]
             parts = []
             for msg in recent:
                 role = "User" if msg["role"] == "user" else "Assistant"
@@ -260,7 +274,6 @@ class Orchestrator:
             result = await agent.process(message, context)
             await self._emit("selected", f"Agent '{agent_name}' responded (confidence={result.confidence:.2f})")
 
-            # Verify low-confidence specialist results
             if result.confidence < 0.6:
                 try:
                     vr = await self.verifier.verify(
@@ -278,7 +291,6 @@ class Orchestrator:
             return await self._chat_path(user_input, history, session_id)
 
     async def _get_memory_context(self, query: str) -> str:
-        """Search memory for relevant context (local, 0 tokens)."""
         if not self._memory:
             return ""
         try:
@@ -292,7 +304,6 @@ class Orchestrator:
         return ""
 
     async def _remember(self, query: str, result: AgentResult) -> None:
-        """Store interaction in memory layers."""
         try:
             if self._memory:
                 await self._memory.store_interaction(query, result.content, result.metadata)

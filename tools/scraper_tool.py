@@ -28,6 +28,11 @@ class ScraperTool(BaseTool):
         selector = kwargs.get("selector", "")
         extract_type = kwargs.get("extract_type", "text")
 
+        from nexus.security.url_filter import is_url_safe
+        safe, reason = is_url_safe(url)
+        if not safe:
+            return ToolResult(success=False, output="", error=f"URL blocked: {reason}")
+
         try:
             import httpx
             async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
