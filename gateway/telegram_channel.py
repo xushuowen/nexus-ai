@@ -101,12 +101,18 @@ class TelegramChannel:
         async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 "🧠 *Nexus AI 說明*\n\n"
-                "這是一個多代理 AI 助理，具備:\n"
+                "*對話方式：*\n"
+                "• 直接打字對話\n"
+                "• 傳送📷圖片 → 自動分析（OCR/描述）\n"
+                "• 傳送📄PDF → 自動提取文字\n"
+                "• 傳送📝文字檔 → 自動讀取內容\n"
+                "• 圖片/文件 + 說明文字 → 針對性分析\n\n"
+                "*系統功能：*\n"
                 "• 多路徑推理 + 自我驗證\n"
-                "• 4 層記憶系統（會記住你教的東西）\n"
-                "• 好奇心引擎（會自主探索知識）\n"
-                "• Token 預算控制（不會燒爆 API）\n\n"
-                "直接打字就能對話！",
+                "• 4 層記憶系統\n"
+                "• 新聞、天氣、提醒、排程等技能\n"
+                "• Token 預算控制\n\n"
+                "*指令：* /status /budget /reset /help",
                 parse_mode="Markdown",
             )
 
@@ -147,6 +153,14 @@ class TelegramChannel:
                 await self._memory.session.clear_session(session_id)
                 self._memory.working.clear()
             await update.message.reply_text("🔄 對話已重置。")
+
+        async def cmd_chatid(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+            chat_id = update.effective_chat.id
+            await update.message.reply_text(
+                f"📋 你的 Chat ID 是：\n`{chat_id}`\n\n"
+                "請把這個數字填入 `.env` 的 `TELEGRAM_CHAT_ID=`",
+                parse_mode="Markdown",
+            )
 
         # ── Message handler ──
         async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -201,12 +215,160 @@ class TelegramChannel:
                 except Exception as e:
                     logger.error(f"Telegram send error: {e}", exc_info=True)
 
+        # ── Photo handler ──
+        async def handle_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+            if not update.message:
+                return
+            chat_id = update.effective_chat.id
+            if not self._is_user_allowed(chat_id):
+                await update.message.reply_text("⛔ 未授權的用戶。")
+                return
+            if not self._orchestrator:
+                await update.message.reply_text("⏳ 系統尚未就緒，請稍後再試。")
+                return
+
+            caption = update.message.caption or "請描述這張圖片的內容。"
+            session_id = f"tg_{chat_id}"
+            await update.message.chat.send_action("typing")
+
+            import time as _time
+            from pathlib import Path as _Path
+
+            upload_dir = _Path(__file__).parent.parent / "data" / "tg_uploads"
+            upload_dir.mkdir(parents=True, exist_ok=True)
+
+            # Download highest-resolution photo
+            photo = update.message.photo[-1]
+            tg_file = await photo.get_file()
+            img_path = upload_dir / f"photo_{int(_time.time())}_{photo.file_id[-8:]}.jpg"
+            await tg_file.download_to_drive(str(img_path))
+            logger.info(f"Photo saved: {img_path}")
+
+            final_answer = ""
+            try:
+                async for event in self._orchestrator.process(
+                    caption, session_id,
+                    extra_context={"has_image": True, "image_path": str(img_path)},
+                    force_agent="vision",
+                ):
+                    if event.event_type == "final_answer":
+                        final_answer = event.content
+            except Exception as e:
+                logger.error(f"Photo processing error: {e}", exc_info=True)
+                final_answer = f"❌ 圖片分析失敗: {e}"
+            finally:
+                try:
+                    img_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+            for chunk in self._split_message(final_answer or "（無法分析圖片）", 4000):
+                await update.message.reply_text(chunk)
+
+        # ── Document handler ──
+        async def handle_document(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+            if not update.message or not update.message.document:
+                return
+            chat_id = update.effective_chat.id
+            if not self._is_user_allowed(chat_id):
+                await update.message.reply_text("⛔ 未授權的用戶。")
+                return
+            if not self._orchestrator:
+                await update.message.reply_text("⏳ 系統尚未就緒，請稍後再試。")
+                return
+
+            doc = update.message.document
+            caption = update.message.caption or ""
+            session_id = f"tg_{chat_id}"
+            await update.message.chat.send_action("typing")
+
+            import time as _time
+            from pathlib import Path as _Path
+
+            upload_dir = _Path(__file__).parent.parent / "data" / "tg_uploads"
+            upload_dir.mkdir(parents=True, exist_ok=True)
+
+            file_name = doc.file_name or "file"
+            ext = _Path(file_name).suffix.lower()
+            mime = doc.mime_type or ""
+
+            IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"}
+            TEXT_EXTS  = {".txt", ".md", ".csv", ".json", ".log", ".py",
+                          ".js", ".ts", ".html", ".css", ".xml", ".yaml", ".yml"}
+
+            save_path = upload_dir / f"{int(_time.time())}_{file_name}"
+            tg_file = await doc.get_file()
+            await tg_file.download_to_drive(str(save_path))
+            logger.info(f"Document saved: {save_path} ({mime})")
+
+            final_answer = ""
+            try:
+                if mime.startswith("image/") or ext in IMAGE_EXTS:
+                    # ── Image document → Vision agent ──
+                    user_q = caption or "請描述這張圖片的內容。"
+                    async for event in self._orchestrator.process(
+                        user_q, session_id,
+                        extra_context={"has_image": True, "image_path": str(save_path)},
+                        force_agent="vision",
+                    ):
+                        if event.event_type == "final_answer":
+                            final_answer = event.content
+                    save_path.unlink(missing_ok=True)
+
+                elif mime == "application/pdf" or ext == ".pdf":
+                    # ── PDF → pdf_reader skill ──
+                    query = f"pdf {save_path}"
+                    if caption:
+                        query += f"\n{caption}"
+                    async for event in self._orchestrator.process(query, session_id):
+                        if event.event_type == "final_answer":
+                            final_answer = event.content
+                    # Keep PDF for possible re-use; user can delete manually
+
+                elif mime.startswith("text/") or ext in TEXT_EXTS:
+                    # ── Text file → read and inject into prompt ──
+                    try:
+                        content = save_path.read_text(encoding="utf-8", errors="replace")[:6000]
+                    except Exception:
+                        content = "(無法讀取檔案內容)"
+                    save_path.unlink(missing_ok=True)
+                    query = f"【檔案：{file_name}】\n{content}"
+                    if caption:
+                        query = f"{caption}\n\n{query}"
+                    async for event in self._orchestrator.process(query, session_id):
+                        if event.event_type == "final_answer":
+                            final_answer = event.content
+
+                else:
+                    save_path.unlink(missing_ok=True)
+                    final_answer = (
+                        f"⚠️ 不支援的檔案格式：`{ext or mime}`\n\n"
+                        "目前支援：\n"
+                        "• 📷 圖片（jpg/png/webp/gif）\n"
+                        "• 📄 PDF 文件\n"
+                        "• 📝 文字檔（txt/md/csv/json/py 等）"
+                    )
+
+            except Exception as e:
+                logger.error(f"Document processing error: {e}", exc_info=True)
+                final_answer = f"❌ 檔案處理失敗: {e}"
+                try:
+                    save_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+            for chunk in self._split_message(final_answer or "（無法處理檔案）", 4000):
+                await update.message.reply_text(chunk)
+
         # Register handlers
         self._app.add_handler(CommandHandler("start", cmd_start))
         self._app.add_handler(CommandHandler("help", cmd_help))
         self._app.add_handler(CommandHandler("status", cmd_status))
         self._app.add_handler(CommandHandler("budget", cmd_budget))
         self._app.add_handler(CommandHandler("reset", cmd_reset))
+        self._app.add_handler(CommandHandler("chatid", cmd_chatid))
+        self._app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+        self._app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
         self._app.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
         )
@@ -218,6 +380,7 @@ class TelegramChannel:
                 BotCommand("status", "系統狀態"),
                 BotCommand("budget", "Token 預算"),
                 BotCommand("reset", "重置對話"),
+                BotCommand("chatid", "查詢我的 Chat ID"),
                 BotCommand("help", "使用說明"),
             ])
         except Exception:
@@ -230,6 +393,21 @@ class TelegramChannel:
         await self._app.initialize()
         await self._app.start()
         await self._app.updater.start_polling(drop_pending_updates=True)
+
+    async def send_to_owner(self, text: str) -> bool:
+        """Proactively send a message to the owner (e.g. morning report)."""
+        chat_id_str = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+        if not chat_id_str or not self._app:
+            logger.warning("send_to_owner: TELEGRAM_CHAT_ID not set or bot not started")
+            return False
+        try:
+            for chunk in self._split_message(text, 4000):
+                await self._app.bot.send_message(chat_id=int(chat_id_str), text=chunk)
+            logger.info("send_to_owner: message sent successfully")
+            return True
+        except Exception as e:
+            logger.error(f"send_to_owner failed: {e}")
+            return False
 
     async def stop(self) -> None:
         self._running = False

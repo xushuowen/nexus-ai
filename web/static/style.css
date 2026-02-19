@@ -179,6 +179,30 @@ body {
 
 .hud-right { display: flex; align-items: center; gap: 20px; }
 
+/* Dashboard nav link in HUD */
+.hud-center-nav {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+}
+.hud-nav-link {
+    font-family: var(--font-title);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 4px 14px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    transition: all 0.2s;
+}
+.hud-nav-link:hover {
+    color: var(--accent);
+    border-color: var(--border);
+    background: var(--accent-dim);
+}
+
 /* ── Stat Bars (SAO HP/MP style) ── */
 .stat-bar-group { display: flex; flex-direction: column; gap: 4px; }
 .stat-bar {

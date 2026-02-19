@@ -46,30 +46,48 @@ SPECIALIST_TRIGGERS = {
         "寫程式", "寫代碼", "code", "程式碼", "debug", "function", "class",
         "python", "javascript", "java", "寫一個", "實作", "implement",
         "bug", "error", "compile", "def ", "import ", "api",
+        "做一個", "建立一個", "幫我寫", "程式", "腳本", "script",
+        "算法", "algorithm", "資料結構", "html", "css", "sql",
+        "爬蟲", "自動化", "for迴圈", "遞迴", "recursion",
+        "幫我做", "幫我建", "寫個", "寫段",
     ],
     "research": [
         "搜尋", "search", "查一下", "找一下", "google", "最新", "新聞",
         "what is the latest", "look up", "find information",
+        "有沒有", "查詢", "找找", "調查", "蒐集",
+        "怎麼做到", "有研究說", "根據資料", "幫我找",
+        "現在", "目前", "近期", "最近有",
     ],
     "reasoning": [
         "為什麼", "why", "分析", "analyze", "推理", "邏輯", "prove",
         "step by step", "calculate", "計算", "數學", "math",
+        "比較", "差異", "差別", "優缺點", "pros and cons",
+        "如果", "假設", "suppose", "應該選哪個", "哪個比較好",
+        "推導", "驗證", "矛盾", "怎麼判斷", "分析一下",
+        "哪個更", "利弊", "評估", "考量",
     ],
     "file": [
         "檔案", "file", "讀取", "read file", "write file", "open",
         "目錄", "directory", "folder", "path",
+        "存到", "儲存", "保存", "建立檔案", "刪除檔案",
+        "哪個資料夾", "副檔名", "打開這個", "找一下檔案",
     ],
     "shell": [
         "執行", "run command", "terminal", "命令", "shell", "bash",
         "pip install", "npm", "git",
+        "安裝", "套件", "啟動服務", "程序", "process",
+        "環境變數", "chmod", "管理員權限", "終端機",
     ],
     "web": [
         "網頁", "website", "url", "瀏覽", "browse", "scrape",
-        "download", "http",
+        "download", "http", "https://", "www.",
+        "這個網站", "打開連結", "從網路下載", "抓取網頁",
     ],
     "vision": [
         "圖片", "image", "照片", "photo", "screenshot", "看看這張",
         "OCR", "辨識", "recognize",
+        "這張圖", "圖中", "圖上", "截圖", "掃描文字",
+        "看一下這個圖", "幫我看圖",
     ],
 }
 
@@ -138,7 +156,13 @@ class Orchestrator:
             except Exception:
                 pass
 
-    async def process(self, user_input: str, session_id: str = "default") -> AsyncIterator[StreamEvent]:
+    async def process(
+        self,
+        user_input: str,
+        session_id: str = "default",
+        extra_context: dict | None = None,
+        force_agent: str | None = None,
+    ) -> AsyncIterator[StreamEvent]:
         """Process user input: skills → agents → chat, yielding events."""
         ts = time.strftime("%H:%M:%S")
         await self._emit("received", f"[{ts}] Received: {user_input[:80]}")
@@ -196,10 +220,10 @@ class Orchestrator:
             return
 
         # Step 6: Check specialist agents (keyword match, 0 tokens)
-        specialist = self._detect_specialist(user_input)
+        specialist = force_agent or self._detect_specialist(user_input)
         if specialist:
             await self._emit("routing", f"[{ts}] Specialist detected: {specialist}")
-            result = await self._specialist_path(user_input, specialist, history, session_id)
+            result = await self._specialist_path(user_input, specialist, history, session_id, extra_context)
         else:
             await self._emit("routing", f"[{ts}] Direct chat mode")
             result = await self._chat_path(user_input, history, session_id)
@@ -297,7 +321,8 @@ class Orchestrator:
             return AgentResult(content=f"抱歉，處理時發生錯誤: {e}", confidence=0.0, source_agent="error")
 
     async def _specialist_path(
-        self, user_input: str, agent_name: str, history: list[dict], session_id: str
+        self, user_input: str, agent_name: str, history: list[dict],
+        session_id: str, extra_context: dict | None = None,
     ) -> AgentResult:
         """Route to a specialist agent with context."""
         await self._emit("routed", f"Complexity: specialist, Agents: ['{agent_name}']")
@@ -317,13 +342,18 @@ class Orchestrator:
                 parts.append(f"{role}: {msg['content'][:200]}")
             recent_history = "\n".join(parts)
 
-        message = AgentMessage(role="user", content=user_input, sender="user")
-        context = {
+        message = AgentMessage(
+            role="user", content=user_input, sender="user",
+            metadata=extra_context or {},
+        )
+        context: dict = {
             "memory": memory_context,
             "history": recent_history,
             "session_id": session_id,
             "complexity": "moderate",
         }
+        if extra_context:
+            context.update(extra_context)
 
         try:
             result = await agent.process(message, context)

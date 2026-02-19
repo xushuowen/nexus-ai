@@ -177,6 +177,60 @@ class LLMProvider:
                 )
             raise
 
+    async def complete_with_image(
+        self,
+        prompt: str,
+        image_path: str,
+        system_prompt: str | None = None,
+        source: str = "vision_agent",
+    ) -> str:
+        """Send a multimodal request with an image. Uses Gemini (vision-capable)."""
+        import base64
+        import mimetypes
+        from pathlib import Path
+
+        data = Path(image_path).read_bytes()
+        b64 = base64.b64encode(data).decode()
+        mime = mimetypes.guess_type(image_path)[0] or "image/jpeg"
+
+        # Always use the primary (Gemini) model for vision
+        spec = self.router.get_primary()
+        tokens_est = len(prompt.split()) * 2 + 300  # rough estimate incl. image
+        mt = min(spec.max_tokens, self.budget.per_request_max)
+
+        if not await self.budget.request_tokens(tokens_est + mt, source=source):
+            raise BudgetExhausted("Daily budget exhausted.")
+
+        messages: list[dict] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
+                {"type": "text", "text": prompt},
+            ],
+        })
+
+        try:
+            response = await litellm.acompletion(
+                model=spec.model_id,
+                messages=messages,
+                max_tokens=mt,
+                temperature=spec.temperature,
+            )
+            content = response.choices[0].message.content or ""
+            total = response.usage.total_tokens if response.usage else tokens_est + len(content.split())
+            await self.budget.consume_tokens(total, source=source, metadata={
+                "model": spec.model_id, "task_type": "vision",
+            })
+            return content
+        except BudgetExhausted:
+            raise
+        except Exception as e:
+            logger.error(f"Vision LLM call failed: {e}")
+            raise
+
     async def simple_call(self, prompt: str, source: str = "system") -> str:
         """Quick call using primary model for internal tasks."""
         return await self.complete(prompt, task_type="simple_tasks", source=source)

@@ -28,6 +28,19 @@ document.addEventListener('DOMContentLoaded', () => {
     setupInput();
     startUptimeTimer();
     document.getElementById('session-id').textContent = sessionId.slice(-6);
+
+    // Pre-fill from dashboard quick access (?q= param)
+    const q = new URLSearchParams(location.search).get('q');
+    if (q) {
+        document.getElementById('user-input').value = q;
+        // Wait for WebSocket then auto-send
+        const autoSend = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                clearInterval(autoSend);
+                sendMessage();
+            }
+        }, 500);
+    }
 });
 
 // ═══ Hex Background (SAO-style) ═══

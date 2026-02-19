@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#05080f">
+    <title>{{ app_name }} — 主控台</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/dashboard.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+    <canvas id="hex-bg"></canvas>
+    <div id="scan-line"></div>
+
+    <div id="dash-app">
+
+        <!-- ═══ Header ═══ -->
+        <header id="dash-header">
+            <div class="dash-brand">
+                <svg viewBox="0 0 44 44" class="dash-logo">
+                    <polygon points="22,2 42,22 22,42 2,22"
+                             fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+                    <polygon points="22,9 35,22 22,35 9,22"
+                             fill="none" stroke="var(--accent)" stroke-width="1" opacity="0.5"/>
+                    <circle cx="22" cy="22" r="4" fill="var(--accent)" opacity="0.85"/>
+                </svg>
+                <div class="brand-labels">
+                    <span class="brand-name">{{ app_name | upper }}</span>
+                    <span class="brand-sub">Multi-Agent Neural System</span>
+                </div>
+            </div>
+
+            <nav id="dash-tabs">
+                <a href="/" class="tab-link">
+                    <svg viewBox="0 0 16 16" width="11" height="11"><polygon points="8,1 15,8 8,15 1,8" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+                    NEURAL LINK
+                </a>
+                <button class="tab-btn active" data-tab="main">主控台</button>
+                <button class="tab-btn" data-tab="skills">技能演化</button>
+            </nav>
+
+            <div class="dash-header-right">
+                <div id="dash-clock" class="dash-clock">--:--:--</div>
+                <div class="dash-online" id="dash-online">
+                    <span class="status-pulse"></span>
+                    <span id="dash-online-text">INITIALIZING</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- ═══ Tab: 主控台 ═══ -->
+        <div id="tab-main" class="tab-content active">
+            <div class="main-grid">
+
+                <!-- ── Left panel ── -->
+                <aside class="grid-panel" id="panel-left">
+                    <div class="gp-section">
+                        <div class="gp-title">SYSTEM</div>
+                        <div class="stat-row">
+                            <span class="sr-label">STATE</span>
+                            <span class="sr-val accent" id="sys-state">IDLE · LISTENING</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="sr-label">AGENTS</span>
+                            <span class="sr-val" id="sys-agents">—</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="sr-label">SKILLS</span>
+                            <span class="sr-val" id="sys-skills">—</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="sr-label">REQUESTS</span>
+                            <span class="sr-val" id="sys-reqs">—</span>
+                        </div>
+                    </div>
+
+                    <div class="gp-section">
+                        <div class="gp-title">CHANNELS</div>
+                        <div class="channel-row">
+                            <span class="ch-dot online"></span>
+                            <span class="ch-name">Web UI</span>
+                            <span class="ch-badge online">online</span>
+                        </div>
+                        <div class="channel-row">
+                            <span class="ch-dot" id="tg-dot"></span>
+                            <span class="ch-name">Telegram</span>
+                            <span class="ch-badge" id="tg-badge">—</span>
+                        </div>
+                    </div>
+
+                    <div class="gp-section">
+                        <div class="gp-title">TOKEN POOL</div>
+                        <div class="tp-bar-wrap">
+                            <div class="tp-bar-track">
+                                <div class="tp-bar-fill" id="tp-fill" style="width:100%"></div>
+                            </div>
+                            <span class="tp-pct" id="tp-pct">100%</span>
+                        </div>
+                        <div class="tp-row"><span>Used</span><span class="tp-val" id="tp-used">0</span></div>
+                        <div class="tp-row"><span>Limit</span><span class="tp-val" id="tp-limit">50,000</span></div>
+                    </div>
+                </aside>
+
+                <!-- ── Center: animated core ── -->
+                <div class="grid-center" id="panel-center">
+                    <div class="nexus-core">
+                        <svg class="nc-svg" viewBox="-65 -65 130 130">
+                            <!-- Background rings -->
+                            <circle r="62" fill="none" stroke="var(--accent)" stroke-width="0.4" opacity="0.12"/>
+                            <circle r="48" fill="none" stroke="var(--accent)" stroke-width="0.4" opacity="0.15"/>
+
+                            <!-- Outer hexagon (CW) -->
+                            <g class="nc-hex-cw">
+                                <polygon points="0,-55 47.6,-27.5 47.6,27.5 0,55 -47.6,27.5 -47.6,-27.5"
+                                         fill="none" stroke="var(--accent)" stroke-width="1" opacity="0.3"/>
+                            </g>
+
+                            <!-- Inner hexagon (CCW) -->
+                            <g class="nc-hex-ccw">
+                                <polygon points="0,-33 28.6,-16.5 28.6,16.5 0,33 -28.6,16.5 -28.6,-16.5"
+                                         fill="none" stroke="var(--accent2)" stroke-width="1" opacity="0.35"/>
+                            </g>
+
+                            <!-- Middle ring -->
+                            <circle r="22" fill="none" stroke="var(--accent)" stroke-width="1.2" opacity="0.5"/>
+
+                            <!-- Center glow -->
+                            <circle r="14" fill="var(--accent)" opacity="0.06" class="nc-pulse"/>
+                            <circle r="8"  fill="var(--accent)" opacity="0.12"/>
+                            <circle r="4"  fill="var(--accent)" opacity="0.9"/>
+
+                            <!-- Orbit 1: gold dot -->
+                            <g class="nc-orb1">
+                                <circle cx="42" cy="0" r="3.5" fill="var(--gold)" opacity="0.9"/>
+                            </g>
+
+                            <!-- Orbit 2: teal dot -->
+                            <g class="nc-orb2">
+                                <circle cx="-28" cy="0" r="2.5" fill="var(--accent2)" opacity="0.75"/>
+                            </g>
+
+                            <!-- Orbit 3: accent dot -->
+                            <g class="nc-orb3">
+                                <circle cx="0" cy="55" r="2" fill="var(--accent)" opacity="0.6"/>
+                            </g>
+                        </svg>
+
+                        <div class="nc-status-wrap">
+                            <div class="nc-status-main" id="nc-status">idle · listening</div>
+                            <div class="nc-status-sub">NEXUS CORE v0.1</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Right: Daily Brief ── -->
+                <aside class="grid-panel" id="panel-right">
+                    <div class="gp-section" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+                        <div class="gp-title">DAILY BRIEF</div>
+                        <div class="brief-date" id="brief-date">Loading...</div>
+                        <div class="brief-list" id="brief-list">
+                            <div class="brief-placeholder">Loading schedule...</div>
+                        </div>
+                    </div>
+
+                    <div class="gp-section">
+                        <div class="gp-title">QUICK ACCESS</div>
+                        <div class="qa-grid">
+                            <button class="qa-btn" onclick="openChat('今日新聞')">今日新聞</button>
+                            <button class="qa-btn" onclick="openChat('天氣')">查看天氣</button>
+                            <button class="qa-btn" onclick="openChat('提醒 列出')">待辦清單</button>
+                            <button class="qa-btn" onclick="openChat('生成晨報')">生成晨報</button>
+                        </div>
+                    </div>
+                </aside>
+
+            </div>
+        </div>
+
+        <!-- ═══ Tab: 技能演化 ═══ -->
+        <div id="tab-skills" class="tab-content">
+            <div class="skills-layout">
+                <!-- Left: category list -->
+                <aside class="skills-sidebar" id="skills-sidebar">
+                    <div class="sb-loading">Loading skills...</div>
+                </aside>
+
+                <!-- Right: D3 graph -->
+                <div class="skills-graph-wrap">
+                    <svg id="skill-graph"></svg>
+                    <div class="skill-tooltip hidden" id="skill-tooltip">
+                        <div class="stt-name" id="stt-name">—</div>
+                        <div class="stt-category" id="stt-category">—</div>
+                        <div class="stt-desc" id="stt-desc">—</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>window.__NEXUS_API_KEY = "{{ api_key }}";</script>
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>

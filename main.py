@@ -27,6 +27,11 @@ from nexus.gateway.telegram_channel import TelegramChannel
 from nexus.security.auth import verify_request, verify_websocket, require_auth, get_api_key
 from nexus.security.rate_limiter import RateLimiter
 from nexus.skills.skill_loader import SkillLoader
+from nexus.core.schedule_runner import ScheduleRunner
+
+import datetime
+import json
+from dataclasses import asdict as _dc_asdict
 
 load_dotenv()
 
@@ -45,7 +50,54 @@ telegram: TelegramChannel | None = None
 skill_loader: SkillLoader | None = None
 active_websockets: list[WebSocket] = []
 rate_limiter: RateLimiter | None = None
+_schedule_runner: ScheduleRunner | None = None
 _init_complete = False
+
+
+async def _morning_report_check(orch, tg) -> None:
+    """啟動時晨報補送：若今天尚未發送且現在是早上 6-11 點，自動送出。"""
+    now = datetime.datetime.now()
+    if not (6 <= now.hour < 11):
+        return
+
+    report_file = config.data_dir() / "morning_report.json"
+    today = now.strftime("%Y-%m-%d")
+
+    if report_file.exists():
+        try:
+            data = json.loads(report_file.read_text(encoding="utf-8"))
+            if data.get("last_date") == today:
+                logger.info("Morning report already sent today, skipping.")
+                return
+        except Exception:
+            pass
+
+    logger.info("Morning report: generating...")
+    weekdays = ["一", "二", "三", "四", "五", "六", "日"]
+    weekday = weekdays[now.weekday()]
+    prompt = (
+        f"現在是 {today} 星期{weekday} 早上 {now.strftime('%H:%M')}。"
+        "請給我一份簡短的晨報，包含：今日日期星期、一句激勵話語、今天值得注意的事項提醒。"
+        "控制在 150 字以內，語氣輕鬆友善。"
+    )
+
+    report_text = ""
+    try:
+        async for event in orch.process(prompt, session_id="morning_report"):
+            if event.event_type == "final_answer":
+                report_text = event.content
+    except Exception as e:
+        logger.error(f"Morning report generation failed: {e}")
+        return
+
+    if report_text:
+        sent = await tg.send_to_owner(f"🌅 **今日晨報**\n\n{report_text}")
+        if sent:
+            report_file.write_text(
+                json.dumps({"last_date": today}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            logger.info("Morning report sent and recorded.")
 
 
 async def _deferred_init(llm, mem, orch, tg, bdg):
@@ -70,6 +122,22 @@ async def _deferred_init(llm, mem, orch, tg, bdg):
 
         _init_complete = True
         logger.info("Background init: all systems operational!")
+
+        # 啟動循環排程執行器
+        global _schedule_runner
+        schedule_skill = next(
+            (s for s in skill_loader.list_skills() if s.name == "auto_schedule"), None
+        )
+        if schedule_skill:
+            _schedule_runner = ScheduleRunner(schedule_skill, orch, tg)
+            _schedule_runner.start()
+            logger.info("ScheduleRunner started.")
+        else:
+            logger.warning("auto_schedule skill not found, ScheduleRunner skipped.")
+
+        # 晨報補送：開機後若是早上且今天尚未發送，自動補送
+        await _morning_report_check(orch, tg)
+
     except Exception as e:
         logger.error(f"Background init failed: {e}", exc_info=True)
 
@@ -112,6 +180,12 @@ async def lifespan(app: FastAPI):
     skill_names = [s.name for s in skill_loader.list_skills()]
     logger.info(f"Loaded {len(skill_names)} skills: {skill_names}")
 
+    # Give research agent access to web_search skill
+    for agent in registry.list_agents():
+        if agent.name == "research" and hasattr(agent, "set_skill_loader"):
+            agent.set_skill_loader(skill_loader)
+            logger.info("Injected skill_loader into research agent")
+
     # Broadcast events to all connected WebSockets
     async def broadcast_event(event: StreamEvent):
         msg = json.dumps({
@@ -147,6 +221,8 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down Nexus AI...")
+    if _schedule_runner:
+        _schedule_runner.stop()
     if telegram:
         await telegram.stop()
     if skill_loader:
@@ -267,6 +343,50 @@ async def api_chat(request: Request):
         "answer": final_answer,
         "events": events,
         "budget": budget.get_status(),
+    }
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard(request: Request):
+    return templates.TemplateResponse("dashboard.html", {
+        "request": request,
+        "app_name": config.get("app.name", "Nexus AI"),
+        "api_key": get_api_key() or "",
+    })
+
+
+@app.get("/api/dashboard")
+async def api_dashboard():
+    """Dashboard data: budget, agents, skills with categories, schedules, channel status."""
+    schedules: list = []
+    if skill_loader:
+        schedule_skill = next(
+            (s for s in skill_loader.list_skills() if s.name == "auto_schedule"), None
+        )
+        if schedule_skill and hasattr(schedule_skill, "get_schedules"):
+            try:
+                raw = schedule_skill.get_schedules()
+                schedules = [_dc_asdict(e) for e in raw]
+            except Exception:
+                pass
+
+    return {
+        "status": "operational" if _init_complete else "initializing",
+        "budget": budget.get_status() if budget else {},
+        "agents": [
+            {"name": a.name, "description": getattr(a, "description", "")}
+            for a in registry.list_agents()
+        ] if registry else [],
+        "skills": [
+            {
+                "name": s.name,
+                "description": getattr(s, "description", ""),
+                "category": getattr(s, "category", "general"),
+            }
+            for s in skill_loader.list_skills()
+        ] if skill_loader else [],
+        "schedules": schedules,
+        "telegram": bool(telegram and getattr(telegram, "_running", False)),
     }
 
 
