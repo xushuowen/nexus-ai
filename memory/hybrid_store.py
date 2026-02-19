@@ -13,6 +13,7 @@ from nexus.memory.knowledge_graph import KnowledgeGraph
 from nexus.memory.procedural_memory import ProceduralMemory
 from nexus.memory.temporal import TemporalRetriever
 from nexus.memory.session import SessionManager
+from nexus.memory.experience_memory import ExperienceMemory
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class HybridMemory:
         self.procedural = ProceduralMemory()
         self.temporal = TemporalRetriever()
         self.session = SessionManager()
+        self.experience = ExperienceMemory()
 
     async def initialize(self) -> None:
         """Initialize all memory layers."""
@@ -44,6 +46,7 @@ class HybridMemory:
         await self.kg.initialize()
         await self.procedural.initialize()
         await self.session.initialize()
+        await self.experience.initialize()
         logger.info("All memory layers initialized")
 
     async def search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
@@ -171,4 +174,5 @@ class HybridMemory:
         await self.vector.close()
         await self.kg.close()
         await self.procedural.close()
+        await self.experience.close()
         await self.session.close()

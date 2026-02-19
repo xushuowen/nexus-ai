@@ -14,12 +14,14 @@ from nexus.core.agent_registry import AgentRegistry
 from nexus.core.budget import BudgetController
 from nexus.core.three_stream import StreamEvent, ThreeStreamProcessor
 from nexus.core.verifier import Verifier
+from nexus.core.agent_conference import AgentConference
+from nexus.core.titan_protocol import TitanProtocol, TitanResult
 from nexus.providers.llm_provider import LLMProvider
 from nexus.providers.model_config import ModelRouter
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are Nexus AI, an advanced multi-agent AI assistant system.
+_BASE_SYSTEM_PROMPT = """You are Nexus AI, an advanced multi-agent AI assistant system.
 
 Core traits:
 - You are helpful, accurate, and concise
@@ -93,6 +95,7 @@ class Orchestrator:
         self.max_hypotheses = config.get("orchestrator.max_parallel_hypotheses", 3)
         self._memory = None
         self._skill_loader = None
+        self._conference = AgentConference(registry, llm)
         self._event_callbacks: list = []
 
     def set_memory(self, memory) -> None:
@@ -100,6 +103,23 @@ class Orchestrator:
 
     def set_skill_loader(self, loader) -> None:
         self._skill_loader = loader
+
+    def _build_system_prompt(self) -> str:
+        """Build system prompt with dynamic skill index injection."""
+        prompt = _BASE_SYSTEM_PROMPT
+
+        # Dynamic Skill Prompt injection (Golem Pattern 3)
+        if self._skill_loader:
+            skill_index = self._skill_loader.get_index_text()
+            if skill_index:
+                prompt += (
+                    "\n\nAvailable skills (users can trigger these directly):\n"
+                    + skill_index
+                )
+
+        # Inject Titan Protocol format instructions
+        prompt = TitanProtocol.inject_prompt(prompt)
+        return prompt
 
     def on_event(self, callback) -> None:
         self._event_callbacks.append(callback)
@@ -157,7 +177,25 @@ class Orchestrator:
                 await self._emit("budget_status", json.dumps(status))
                 return
 
-        # Step 5: Check specialist agents (keyword match, 0 tokens)
+        # Step 5: Check if conference mode is warranted
+        team_key = self._conference.should_conference(user_input)
+        if team_key:
+            await self._emit("routing", f"[{ts}] Conference mode: team={team_key}")
+            conf_result = await self._conference.run(
+                topic=user_input, team_key=team_key, session_id=session_id,
+            )
+            yield StreamEvent("orchestrator", "final_answer", conf_result.summary)
+            result = AgentResult(
+                content=conf_result.summary, confidence=0.85,
+                source_agent=f"conference:{team_key}",
+                tokens_used=conf_result.total_tokens,
+            )
+            await self._post_process(user_input, result, session_id)
+            status = self.budget.get_status()
+            await self._emit("budget_status", json.dumps(status))
+            return
+
+        # Step 6: Check specialist agents (keyword match, 0 tokens)
         specialist = self._detect_specialist(user_input)
         if specialist:
             await self._emit("routing", f"[{ts}] Specialist detected: {specialist}")
@@ -166,7 +204,7 @@ class Orchestrator:
             await self._emit("routing", f"[{ts}] Direct chat mode")
             result = await self._chat_path(user_input, history, session_id)
 
-        # Step 6: Yield final answer
+        # Step 7: Yield final answer
         logger.info(f"Final answer: {len(result.content)} chars, confidence={result.confidence}")
         await self._emit("generating", f"[{ts}] Response ready")
         yield StreamEvent("orchestrator", "final_answer", result.content)
@@ -190,7 +228,10 @@ class Orchestrator:
         """Execute a skill directly."""
         await self._emit("routed", f"Skill: '{skill.name}' activated")
 
-        context = {"llm": self.llm, "memory": self._memory, "session_id": session_id}
+        context = {
+            "llm": self.llm, "memory": self._memory,
+            "session_id": session_id, "skill_loader": self._skill_loader,
+        }
         result = await self._skill_loader.execute(skill, user_input, context)
 
         return AgentResult(
@@ -219,7 +260,8 @@ class Orchestrator:
         self, user_input: str, history: list[dict], session_id: str
     ) -> AgentResult:
         """Direct chat: send conversation history + new message to LLM."""
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        system_prompt = self._build_system_prompt()
+        messages = [{"role": "system", "content": system_prompt}]
 
         memory_context = await self._get_memory_context(user_input)
         if memory_context:
@@ -228,15 +270,28 @@ class Orchestrator:
                 "content": f"Relevant memories:\n{memory_context}",
             })
 
+        # Experience Memory injection (Golem Pattern 4)
+        experience_context = await self._get_experience_context()
+        if experience_context:
+            messages.append({
+                "role": "system",
+                "content": f"User experience context:\n{experience_context}",
+            })
+
         for msg in history[:-1]:
             messages.append(msg)
         messages.append({"role": "user", "content": user_input})
 
         try:
-            content = await self.llm.complete_chat(
+            raw_content = await self.llm.complete_chat(
                 messages=messages, task_type="general", source="chat",
             )
-            return AgentResult(content=content, confidence=0.8, source_agent="chat")
+
+            # Titan Protocol: parse structured response
+            titan = TitanProtocol.parse(raw_content)
+            await self._process_titan_result(titan, session_id)
+
+            return AgentResult(content=titan.reply, confidence=0.8, source_agent="chat")
         except Exception as e:
             logger.error(f"Chat path error: {e}", exc_info=True)
             return AgentResult(content=f"抱歉，處理時發生錯誤: {e}", confidence=0.0, source_agent="error")
@@ -272,6 +327,12 @@ class Orchestrator:
 
         try:
             result = await agent.process(message, context)
+
+            # Titan Protocol: parse agent response for memory extraction
+            titan = TitanProtocol.parse(result.content)
+            await self._process_titan_result(titan, session_id)
+            result.content = titan.reply
+
             await self._emit("selected", f"Agent '{agent_name}' responded (confidence={result.confidence:.2f})")
 
             if result.confidence < 0.6:
@@ -290,6 +351,28 @@ class Orchestrator:
             logger.error(f"Specialist '{agent_name}' failed: {e}", exc_info=True)
             return await self._chat_path(user_input, history, session_id)
 
+    async def _process_titan_result(self, titan: TitanResult, session_id: str) -> None:
+        """Process Titan Protocol memory and action sections."""
+        # Store memories
+        if titan.memory and self._memory:
+            try:
+                for line in titan.memory.split("\n"):
+                    line = line.strip().lstrip("- ")
+                    if line and len(line) > 3:
+                        await self._memory.store_knowledge(
+                            title=line[:100],
+                            content=line,
+                            category="titan_memory",
+                        )
+                        logger.debug(f"Titan memory stored: {line[:60]}")
+            except Exception as e:
+                logger.warning(f"Titan memory store error: {e}")
+
+        # Process actions (extensible — currently logs them)
+        for action in titan.actions:
+            action_type = action.get("type", "unknown")
+            logger.info(f"Titan action: {action_type} — {action}")
+
     async def _get_memory_context(self, query: str) -> str:
         if not self._memory:
             return ""
@@ -302,6 +385,16 @@ class Orchestrator:
         except Exception as e:
             logger.warning(f"Memory search error: {e}")
         return ""
+
+    async def _get_experience_context(self) -> str:
+        """Get experience-based preferences for prompt injection."""
+        if not self._memory:
+            return ""
+        try:
+            return await self._memory.experience.inject_context()
+        except Exception as e:
+            logger.warning(f"Experience context error: {e}")
+            return ""
 
     async def _remember(self, query: str, result: AgentResult) -> None:
         try:
