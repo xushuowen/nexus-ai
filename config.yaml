@@ -31,24 +31,37 @@ orchestrator:
   simple_question_threshold: 0.85
 
 providers:
-  primary: "groq-llama"
-  fallback: "gemini-flash"
+  primary: "github-gpt4o-mini"
+  fallback: "groq-llama"
   models:
+    github-gpt4o-mini:
+      model_id: "openai/gpt-4o-mini"
+      api_base: "https://models.inference.ai.azure.com"
+      max_tokens: 4096
+      temperature: 0.7
+      use_for: ["general", "routing", "simple_tasks", "classification",
+                "complex_reasoning", "analysis", "code_generation"]
+    github-gpt4o:
+      model_id: "openai/gpt-4o"
+      api_base: "https://models.inference.ai.azure.com"
+      max_tokens: 4096
+      temperature: 0.7
+      use_for: ["vision"]
     groq-llama:
       model_id: "groq/llama-3.3-70b-versatile"
       max_tokens: 2000
       temperature: 0.7
-      use_for: ["routing", "simple_tasks", "classification", "general"]
+      use_for: []
     groq-mixtral:
       model_id: "groq/mixtral-8x7b-32768"
       max_tokens: 2000
       temperature: 0.7
-      use_for: ["code_generation"]
+      use_for: []
     gemini-flash:
       model_id: "gemini/gemini-2.0-flash-exp"
       max_tokens: 2000
       temperature: 0.7
-      use_for: ["complex_reasoning", "analysis"]
+      use_for: []
     gemini-pro:
       model_id: "gemini/gemini-1.5-pro-latest"
       max_tokens: 4000

@@ -26,6 +26,8 @@ def load_config(path: Path | None = None) -> dict[str, Any]:
         cfg.setdefault("api_keys", {})["groq"] = os.getenv("GROQ_API_KEY")
     if os.getenv("OPENAI_API_KEY"):
         cfg.setdefault("api_keys", {})["openai"] = os.getenv("OPENAI_API_KEY")
+    if os.getenv("GITHUB_TOKEN"):
+        cfg.setdefault("api_keys", {})["github"] = os.getenv("GITHUB_TOKEN")
     if os.getenv("TELEGRAM_BOT_TOKEN"):
         cfg.setdefault("gateway", {}).setdefault("telegram", {})["token"] = os.getenv("TELEGRAM_BOT_TOKEN")
     if os.getenv("NEXUS_DAILY_LIMIT"):

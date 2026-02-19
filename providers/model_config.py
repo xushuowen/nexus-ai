@@ -14,6 +14,7 @@ class ModelSpec:
     max_tokens: int
     temperature: float
     use_for: list[str]
+    api_base: str = ""
 
 
 class ModelRouter:
@@ -30,6 +31,7 @@ class ModelRouter:
                 max_tokens=mcfg["max_tokens"],
                 temperature=mcfg["temperature"],
                 use_for=mcfg.get("use_for", []),
+                api_base=mcfg.get("api_base", ""),
             )
 
     def route(self, task_type: str = "general") -> ModelSpec:

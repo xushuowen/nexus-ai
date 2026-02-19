@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, AsyncIterator
 
 import litellm
@@ -15,6 +16,8 @@ logger = logging.getLogger(__name__)
 # Suppress litellm's verbose logging
 litellm.set_verbose = False
 
+_GITHUB_API_BASE = "https://models.inference.ai.azure.com"
+
 
 class LLMProvider:
     """Unified LLM interface with automatic budget enforcement."""
@@ -22,6 +25,18 @@ class LLMProvider:
     def __init__(self, budget: BudgetController, router: ModelRouter) -> None:
         self.budget = budget
         self.router = router
+
+    @staticmethod
+    def _extra_kwargs(spec: ModelSpec) -> dict:
+        """Return api_base / api_key kwargs for custom endpoints (e.g. GitHub Models)."""
+        if not spec.api_base:
+            return {}
+        kwargs: dict = {"api_base": spec.api_base}
+        if _GITHUB_API_BASE in spec.api_base:
+            token = os.environ.get("GITHUB_TOKEN", "")
+            if token:
+                kwargs["api_key"] = token
+        return kwargs
 
     async def complete(
         self,
@@ -54,6 +69,7 @@ class LLMProvider:
                 messages=messages,
                 max_tokens=mt,
                 temperature=temperature if temperature is not None else spec.temperature,
+                **self._extra_kwargs(spec),
             )
             content = response.choices[0].message.content or ""
             # Track actual usage
@@ -109,6 +125,7 @@ class LLMProvider:
                 max_tokens=mt,
                 temperature=spec.temperature,
                 stream=True,
+                **self._extra_kwargs(spec),
             )
             total_tokens = tokens_est
             async for chunk in response:
@@ -153,6 +170,7 @@ class LLMProvider:
                 messages=messages,
                 max_tokens=mt,
                 temperature=temperature if temperature is not None else spec.temperature,
+                **self._extra_kwargs(spec),
             )
             content = response.choices[0].message.content or ""
             usage = response.usage
@@ -184,7 +202,7 @@ class LLMProvider:
         system_prompt: str | None = None,
         source: str = "vision_agent",
     ) -> str:
-        """Send a multimodal request with an image. Uses Gemini (vision-capable)."""
+        """Send a multimodal request with an image. Uses primary vision-capable model."""
         import base64
         import mimetypes
         from pathlib import Path
@@ -218,6 +236,7 @@ class LLMProvider:
                 messages=messages,
                 max_tokens=mt,
                 temperature=spec.temperature,
+                **self._extra_kwargs(spec),
             )
             content = response.choices[0].message.content or ""
             total = response.usage.total_tokens if response.usage else tokens_est + len(content.split())
