@@ -12,6 +12,12 @@ class WeatherSkill(BaseSkill):
     name = "weather"
     description = "查詢全球任意城市天氣預報（wttr.in，免費）"
     triggers = ["天氣", "weather", "幾度", "temperature", "下雨", "rain", "氣溫", "預報", "forecast"]
+    intent_patterns = [
+        r"(今天|明天|這週|這幾天).{0,10}(冷|熱|涼|穿什麼|帶傘)",
+        r"要(帶傘|穿外套|穿厚|穿薄)",
+        r"(冷嗎|熱嗎|會下雨嗎|需要帶傘嗎)",
+        r"(出門|外出).{0,10}(要帶|需要|穿)",
+    ]
     category = "utility"
     requires_llm = False
 
@@ -76,10 +82,29 @@ class WeatherSkill(BaseSkill):
         except Exception as e:
             return SkillResult(content=f"天氣查詢失敗: {e}", success=False, source=self.name)
 
+    # Common Chinese filler words to strip after trigger removal
+    _FILLER = [
+        "今天", "明天", "這週", "這幾天", "現在", "查一下", "幫我查", "查詢",
+        "怎麼樣", "如何", "狀況", "情況", "怎樣", "呢", "嗎", "啊", "吧",
+        "的", "是", "有", "會", "要",
+    ]
+
     def _extract_city(self, query: str) -> str:
-        """Extract city name from query by removing trigger words."""
+        """Extract city name from query by removing trigger and filler words."""
         text = query
+        # Remove trigger words
         for t in self.triggers:
             text = re.sub(re.escape(t), "", text, flags=re.IGNORECASE)
-        text = text.strip(" ?？，,。.")
-        return text if len(text) >= 1 else ""
+        # Remove filler words
+        for f in self._FILLER:
+            text = text.replace(f, "")
+        # Strip punctuation and whitespace
+        text = text.strip(" ?？，,。.、！!　\t\n")
+        # Map common Chinese shorthand to wttr.in-friendly names
+        city_map = {
+            "台北": "Taipei", "臺北": "Taipei", "新北": "New Taipei",
+            "台中": "Taichung", "臺中": "Taichung", "台南": "Tainan", "臺南": "Tainan",
+            "高雄": "Kaohsiung", "桃園": "Taoyuan", "新竹": "Hsinchu",
+            "基隆": "Keelung", "花蓮": "Hualien", "台東": "Taitung",
+        }
+        return city_map.get(text, text) if text else ""

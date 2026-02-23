@@ -13,6 +13,7 @@ from nexus.skills.skill_base import BaseSkill, SkillResult
 PT_MESH_TERMS = {
     "物理治療": "Physical Therapy Modalities[MeSH]",
     "physical therapy": "Physical Therapy Modalities[MeSH]",
+    "physiotherapy": "Physical Therapy Modalities[MeSH]",
     "復健": "Rehabilitation[MeSH]",
     "rehabilitation": "Rehabilitation[MeSH]",
     "運動治療": "Exercise Therapy[MeSH]",
@@ -24,10 +25,41 @@ PT_MESH_TERMS = {
     "中風": "Stroke[MeSH]",
     "stroke": "Stroke[MeSH]",
     "骨科": "Orthopedics[MeSH]",
+    # Knee
     "膝關節": "Knee Joint[MeSH]",
+    "前十字韌帶": "Anterior Cruciate Ligament[MeSH]",
+    "十字韌帶": "Anterior Cruciate Ligament[MeSH]",
+    "ACL": "Anterior Cruciate Ligament[MeSH]",
+    "acl": "Anterior Cruciate Ligament[MeSH]",
+    "anterior cruciate ligament": "Anterior Cruciate Ligament[MeSH]",
+    "後十字韌帶": "Posterior Cruciate Ligament[MeSH]",
+    "PCL": "Posterior Cruciate Ligament[MeSH]",
+    "pcl": "Posterior Cruciate Ligament[MeSH]",
+    "半月板": "Menisci, Tibial[MeSH]",
+    "meniscus": "Menisci, Tibial[MeSH]",
+    "髕骨": "Patella[MeSH]",
+    "patella": "Patella[MeSH]",
+    "髂脛束": "Iliotibial Band Syndrome[MeSH]",
+    # Shoulder
     "肩關節": "Shoulder Joint[MeSH]",
+    "旋轉肌": "Rotator Cuff[MeSH]",
+    "rotator cuff": "Rotator Cuff[MeSH]",
+    "肩夾擠": "Shoulder Impingement Syndrome[MeSH]",
+    # Spine
     "腰痛": "Low Back Pain[MeSH]",
     "low back pain": "Low Back Pain[MeSH]",
+    "頸椎": "Cervical Vertebrae[MeSH]",
+    "腰椎": "Lumbar Vertebrae[MeSH]",
+    "椎間盤": "Intervertebral Disc[MeSH]",
+    # Neuro
+    "平衡": "Postural Balance[MeSH]",
+    "balance": "Postural Balance[MeSH]",
+    "步態": "Gait[MeSH]",
+    "gait": "Gait[MeSH]",
+    "本體感覺": "Proprioception[MeSH]",
+    "proprioception": "Proprioception[MeSH]",
+    "肌力": "Muscle Strength[MeSH]",
+    "muscle strength": "Muscle Strength[MeSH]",
 }
 
 
@@ -37,7 +69,9 @@ class AcademicSearchSkill(BaseSkill):
     triggers = [
         "論文", "paper", "期刊", "journal", "pubmed", "研究", "文獻",
         "學術", "academic", "physical therapy", "物理治療", "文獻搜尋",
-        "semantic scholar", "openalex",
+        "semantic scholar", "openalex", "前十字韌帶", "ACL", "acl",
+        "半月板", "meniscus", "旋轉肌", "rotator cuff", "椎間盤",
+        "找文獻", "找論文", "查論文", "查文獻", "搜論文",
     ]
     category = "academic"
     requires_llm = False
@@ -49,11 +83,18 @@ class AcademicSearchSkill(BaseSkill):
         "3. 自動增強 PT 相關 MeSH 術語"
     )
 
+    # Filler words to strip from query before searching
+    _FILLER = ["查有關", "查一下", "找一下", "幫我找", "幫我查", "相關的", "相關",
+               "有哪些", "有沒有", "的論文", "的期刊", "的研究", "的文獻",
+               "查詢", "搜尋", "搜索", "查找", "資料"]
+
     async def execute(self, query: str, context: dict[str, Any]) -> SkillResult:
-        # Clean query
+        # Clean query — remove triggers and filler words
         for t in self.triggers:
-            query = query.replace(t, "").strip()
-        query = query.strip()
+            query = re.sub(re.escape(t), " ", query, flags=re.IGNORECASE)
+        for f in self._FILLER:
+            query = query.replace(f, " ")
+        query = re.sub(r"\s+", " ", query).strip(" ?？，,。.、")
 
         if not query or len(query) < 2:
             return SkillResult(
