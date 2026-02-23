@@ -80,7 +80,8 @@ class AcademicSearchSkill(BaseSkill):
         "學術搜尋：\n"
         "1. PubMed：「論文 physical therapy stroke」\n"
         "2. Semantic Scholar：「論文 semantic scholar knee rehabilitation」\n"
-        "3. 自動增強 PT 相關 MeSH 術語"
+        "3. 自動增強 PT 相關 MeSH 術語\n"
+        "4. 搜尋後可說「存到骨科筆記」儲存結果"
     )
 
     # Filler words to strip from query before searching
@@ -88,7 +89,22 @@ class AcademicSearchSkill(BaseSkill):
                "有哪些", "有沒有", "的論文", "的期刊", "的研究", "的文獻",
                "查詢", "搜尋", "搜索", "查找", "資料"]
 
+    # Save-to-notes action keywords
+    _SAVE_TRIGGERS = ["存到", "存進", "儲存", "記錄", "加到", "加入", "save to", "save"]
+
+    # Class-level cache: last search results per session
+    _last_results: dict[str, list[dict]] = {}
+
     async def execute(self, query: str, context: dict[str, Any]) -> SkillResult:
+        session_id = context.get("session_id", "default")
+        raw_query = query
+
+        # Check if this is a "save to notes" action
+        if any(kw in raw_query for kw in self._SAVE_TRIGGERS) and any(
+            kw in raw_query for kw in ["筆記", "note", "骨科", "notes"]
+        ):
+            return await self._save_to_notes(raw_query, session_id, context)
+
         # Clean query — remove triggers and filler words
         for t in self.triggers:
             query = re.sub(re.escape(t), " ", query, flags=re.IGNORECASE)
@@ -98,7 +114,7 @@ class AcademicSearchSkill(BaseSkill):
 
         if not query or len(query) < 2:
             return SkillResult(
-                content="請提供搜尋關鍵字，例如：「論文 physical therapy stroke rehabilitation」",
+                content="請提供搜尋關鍵字，例如：「論文 前十字韌帶 復健」",
                 success=False, source=self.name,
             )
 
@@ -107,13 +123,72 @@ class AcademicSearchSkill(BaseSkill):
         # Decide which database to search
         if "semantic scholar" in text_lower or "s2" in text_lower:
             query = query.replace("semantic scholar", "").replace("s2", "").strip()
-            return await self._search_semantic_scholar(query)
+            result = await self._search_semantic_scholar(query)
         elif "openalex" in text_lower:
             query = query.replace("openalex", "").strip()
-            return await self._search_openalex(query)
+            result = await self._search_openalex(query)
         else:
-            # Default: PubMed (best for PT/medical)
-            return await self._search_pubmed(query)
+            result = await self._search_pubmed(query)
+
+        # Append save hint and return
+        if result.success:
+            result.content += "\n\n💡 輸入「存到骨科筆記」可將以上論文儲存至筆記系統。"
+            # Store metadata for potential save action
+            result.metadata["query"] = query
+            result.metadata["session_id"] = session_id
+        return result
+
+    async def _save_to_notes(self, query: str, session_id: str, context: dict[str, Any]) -> SkillResult:
+        """Save last search results to study_notes DB."""
+        import sqlite3, time
+        from nexus import config
+
+        cached = self._last_results.get(session_id, [])
+        if not cached:
+            return SkillResult(
+                content="找不到可儲存的論文。請先搜尋論文，再說「存到骨科筆記」。",
+                success=False, source=self.name,
+            )
+
+        # Detect subject from query
+        subject = "orthopedics"
+        subject_map = {
+            "骨科": "orthopedics", "復健": "rehabilitation", "神經": "neurology",
+            "心肺": "cardiopulmonary", "小兒": "pediatrics", "老人": "geriatrics",
+        }
+        for kw, subj in subject_map.items():
+            if kw in query:
+                subject = subj
+                break
+
+        db_path = config.data_dir() / "study_notes.db"
+        try:
+            conn = sqlite3.connect(str(db_path))
+            conn.execute("""CREATE TABLE IF NOT EXISTS notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                subject TEXT NOT NULL, chapter TEXT DEFAULT '',
+                content TEXT NOT NULL, tags TEXT DEFAULT '',
+                timestamp REAL NOT NULL, date TEXT NOT NULL)""")
+            now = time.time()
+            date_str = time.strftime("%Y-%m-%d")
+            saved = 0
+            for paper in cached:
+                content = f"[論文] {paper.get('title', '')} | {paper.get('authors', '')} | {paper.get('journal', '')} {paper.get('year', '')} | {paper.get('url', paper.get('pmid', ''))}"
+                conn.execute(
+                    "INSERT INTO notes (subject, content, tags, timestamp, date) VALUES (?, ?, ?, ?, ?)",
+                    (subject, content[:500], "論文,academic_search", now + saved * 0.001, date_str),
+                )
+                saved += 1
+            conn.commit()
+            conn.close()
+
+            subject_zh = {"orthopedics": "骨科", "rehabilitation": "復健"}.get(subject, subject)
+            return SkillResult(
+                content=f"📚 已將 **{saved} 篇論文**儲存至「{subject_zh}」筆記！\n輸入「筆記 複習 骨科」可查看。",
+                success=True, source=self.name,
+            )
+        except Exception as e:
+            return SkillResult(content=f"儲存失敗：{e}", success=False, source=self.name)
 
     async def _search_pubmed(self, query: str) -> SkillResult:
         """Search PubMed via E-utilities API (free, 3 req/sec)."""
@@ -158,6 +233,9 @@ class AcademicSearchSkill(BaseSkill):
 
                 articles = self._parse_pubmed_xml(fetch_resp.text)
 
+                # Cache for save-to-notes action
+                session_id = "default"
+                cache_items = []
                 lines = [f"📚 **PubMed 搜尋結果**（共 {total} 筆，顯示 {len(articles)} 筆）\n"]
                 for i, article in enumerate(articles, 1):
                     lines.append(f"**{i}. {article['title']}**")
@@ -170,6 +248,17 @@ class AcademicSearchSkill(BaseSkill):
                     if article.get("abstract"):
                         lines.append(f"   📝 {article['abstract'][:150]}...")
                     lines.append("")
+                    cache_items.append({
+                        "title": article.get("title", ""),
+                        "authors": article.get("authors", ""),
+                        "journal": article.get("journal", ""),
+                        "year": article.get("year", ""),
+                        "pmid": article.get("pmid", ""),
+                        "url": f"https://pubmed.ncbi.nlm.nih.gov/{article.get('pmid', '')}/",
+                    })
+
+                # Save to class cache
+                AcademicSearchSkill._last_results[session_id] = cache_items
 
                 return SkillResult(content="\n".join(lines), success=True, source=self.name)
 
