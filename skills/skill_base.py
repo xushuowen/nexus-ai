@@ -8,6 +8,7 @@ Architecture:
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
@@ -36,6 +37,7 @@ class BaseSkill(ABC):
     name: str = "base"
     description: str = "Base skill"
     triggers: list[str] = []          # Keywords that activate this skill
+    intent_patterns: list[str] = []   # Regex patterns for intent matching
     category: str = "general"
     requires_llm: bool = False        # Whether this skill needs LLM to run
 
@@ -44,9 +46,16 @@ class BaseSkill(ABC):
     output_format: str = ""           # Expected output format
 
     def match_score(self, text: str) -> int:
-        """Level 1: Check how well input matches this skill's triggers."""
+        """Level 1: Check how well input matches this skill's triggers or intent patterns."""
         text_lower = text.lower()
-        return sum(1 for t in self.triggers if t.lower() in text_lower)
+        score = sum(1 for t in self.triggers if t.lower() in text_lower)
+        # Intent patterns catch natural language that doesn't use exact trigger words
+        if score == 0:
+            for pattern in self.intent_patterns:
+                if re.search(pattern, text, re.IGNORECASE):
+                    score += 1
+                    break  # One intent match is enough to activate
+        return score
 
     def get_index(self) -> dict[str, str]:
         """Level 1: Return index entry for LLM routing."""
