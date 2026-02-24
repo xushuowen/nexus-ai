@@ -7,6 +7,7 @@ Supports consensus detection and automatic summarization.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
@@ -144,8 +145,10 @@ class AgentConference:
         for round_num in range(1, max_rounds + 1):
             conference_round = ConferenceRound(round_number=round_num)
 
+            # Build all agents' messages for this round (they all see the same
+            # shared_context from previous rounds — fairer and unbiased).
+            tasks_meta = []
             for agent_name, agent in agents:
-                # Build context with previous contributions
                 prompt = (
                     f"你正在參與一場多 Agent 團隊討論。\n"
                     f"你的角色是: {agent_name}\n"
@@ -154,7 +157,6 @@ class AgentConference:
                     f"請從你的專業角度提供見解。"
                     f"{'如果你同意前面的結論，請說「同意」並補充。' if round_num > 1 else ''}"
                 )
-
                 message = AgentMessage(role="user", content=prompt, sender="conference")
                 context = {
                     "memory": "",
@@ -162,29 +164,39 @@ class AgentConference:
                     "session_id": session_id,
                     "complexity": "moderate",
                 }
+                tasks_meta.append((agent_name, agent, message, context))
 
+            # Run all agents in parallel with per-agent timeout — up to 3x faster
+            async def _run_one(name: str, ag, msg: AgentMessage, ctx: dict) -> AgentResult:
                 try:
-                    result = await agent.process(message, context)
-                    contribution = {
-                        "agent": agent_name,
-                        "content": result.content,
-                        "confidence": result.confidence,
-                        "tokens": result.tokens_used,
-                    }
-                    conference_round.contributions.append(contribution)
-                    total_tokens += result.tokens_used
+                    return await asyncio.wait_for(ag.process(msg, ctx), timeout=25.0)
+                except asyncio.TimeoutError:
+                    logger.warning(f"Conference: agent '{name}' timed out (25s), round {round_num}")
+                    return AgentResult(
+                        content="(回應逾時)", confidence=0.0,
+                        source_agent=name, tokens_used=0,
+                    )
+                except Exception as exc:
+                    logger.warning(f"Conference: agent '{name}' failed: {exc}")
+                    return AgentResult(
+                        content=f"(Agent 回應失敗: {exc})", confidence=0.0,
+                        source_agent=name, tokens_used=0,
+                    )
 
-                    # Add to shared context
-                    shared_context += f"\n[{agent_name} - 第{round_num}輪]: {result.content[:500]}\n"
+            results = await asyncio.gather(
+                *[_run_one(n, a, m, c) for n, a, m, c in tasks_meta]
+            )
 
-                except Exception as e:
-                    logger.warning(f"Agent '{agent_name}' failed in conference: {e}")
-                    conference_round.contributions.append({
-                        "agent": agent_name,
-                        "content": f"(Agent 回應失敗: {e})",
-                        "confidence": 0.0,
-                        "tokens": 0,
-                    })
+            for (agent_name, _, _, _), result in zip(tasks_meta, results):
+                contribution = {
+                    "agent": agent_name,
+                    "content": result.content,
+                    "confidence": result.confidence,
+                    "tokens": result.tokens_used,
+                }
+                conference_round.contributions.append(contribution)
+                total_tokens += result.tokens_used
+                shared_context += f"\n[{agent_name} - 第{round_num}輪]: {result.content[:500]}\n"
 
             # Check for consensus
             if round_num > 1:

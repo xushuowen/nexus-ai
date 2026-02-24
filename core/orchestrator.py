@@ -115,6 +115,7 @@ class Orchestrator:
         self._skill_loader = None
         self._conference = AgentConference(registry, llm)
         self._event_callbacks: list = []
+        self._request_count: int = 0  # for periodic working memory decay
 
     def set_memory(self, memory) -> None:
         self._memory = memory
@@ -241,12 +242,20 @@ class Orchestrator:
 
     async def _post_process(self, user_input: str, result: AgentResult, session_id: str) -> None:
         """Save response and remember interaction."""
+        self._request_count += 1
         if self._memory:
             try:
                 await self._memory.session.add_message(session_id, "assistant", result.content)
             except Exception as e:
                 logger.warning(f"Session save error: {e}")
             asyncio.create_task(self._remember(user_input, result))
+            # Periodically decay working memory attention weights (every 10 requests)
+            if self._request_count % 10 == 0:
+                try:
+                    self._memory.working.decay_all()
+                    logger.debug("Working memory decay applied")
+                except Exception:
+                    pass
 
     async def _skill_path(self, user_input: str, skill, session_id: str) -> AgentResult:
         """Execute a skill directly."""
@@ -356,7 +365,7 @@ class Orchestrator:
             context.update(extra_context)
 
         try:
-            result = await agent.process(message, context)
+            result = await asyncio.wait_for(agent.process(message, context), timeout=30.0)
 
             # Titan Protocol: parse agent response for memory extraction
             titan = TitanProtocol.parse(result.content)
@@ -377,6 +386,9 @@ class Orchestrator:
                     pass
 
             return result
+        except asyncio.TimeoutError:
+            logger.error(f"Specialist '{agent_name}' timed out (30s), falling back to chat")
+            return await self._chat_path(user_input, history, session_id)
         except Exception as e:
             logger.error(f"Specialist '{agent_name}' failed: {e}", exc_info=True)
             return await self._chat_path(user_input, history, session_id)
@@ -406,12 +418,19 @@ class Orchestrator:
     async def _get_memory_context(self, query: str) -> str:
         if not self._memory:
             return ""
+        # Cache in working memory to avoid repeated 5-layer searches for same query
+        cache_key = f"_mem:{query[:60]}"
+        cached = self._memory.working.retrieve(cache_key)
+        if cached is not None:
+            return cached
         try:
             results = await self._memory.search(query, top_k=3)
             if results:
                 parts = [r.get("content", "")[:200] for r in results if r.get("content")]
                 if parts:
-                    return "\n".join(f"- {p}" for p in parts)
+                    context = "\n".join(f"- {p}" for p in parts)
+                    self._memory.working.store(cache_key, context, attention=0.4)
+                    return context
         except Exception as e:
             logger.warning(f"Memory search error: {e}")
         return ""

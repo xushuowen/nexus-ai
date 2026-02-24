@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import logging
 from pathlib import Path
@@ -54,9 +55,15 @@ class SkillLoader:
         return None
 
     async def execute(self, skill: BaseSkill, query: str, context: dict[str, Any]) -> SkillResult:
-        """Execute a skill (Level 3)."""
+        """Execute a skill (Level 3) with a hard 30-second timeout."""
         try:
-            return await skill.execute(query, context)
+            return await asyncio.wait_for(skill.execute(query, context), timeout=30.0)
+        except asyncio.TimeoutError:
+            logger.error(f"Skill '{skill.name}' timed out after 30s")
+            return SkillResult(
+                content=f"'{skill.name}' 處理超時（30秒），請稍後再試。",
+                success=False, source=skill.name,
+            )
         except Exception as e:
             logger.error(f"Skill '{skill.name}' failed: {e}", exc_info=True)
             return SkillResult(content=f"Skill error: {e}", success=False, source=skill.name)

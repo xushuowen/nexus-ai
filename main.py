@@ -115,6 +115,14 @@ async def _deferred_init(llm, mem, orch, tg, bdg):
         await mem.initialize()
         logger.info("Background init: memory ready")
 
+        # Prune sessions older than 30 days on every startup to keep the DB lean
+        try:
+            deleted = await mem.session.prune_old_messages(keep_days=30)
+            if deleted:
+                logger.info(f"Session pruner: removed {deleted} old messages on startup")
+        except Exception as e:
+            logger.warning(f"Session prune failed: {e}")
+
         orch.set_memory(mem)
 
         # Start Telegram bot

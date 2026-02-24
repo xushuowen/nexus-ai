@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 import time
 from dataclasses import dataclass, field
@@ -10,6 +11,8 @@ from pathlib import Path
 from typing import Any
 
 from nexus import config
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -83,6 +86,40 @@ class SessionManager:
         self._sessions.pop(session_id, None)
         self._conn.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
         self._conn.commit()
+
+    async def prune_old_messages(self, keep_days: int = 30) -> int:
+        """Delete session messages older than keep_days. Returns number deleted.
+
+        Call this on startup or periodically to keep the DB from growing forever.
+        """
+        cutoff = time.time() - (keep_days * 86400)
+        result = self._conn.execute(
+            "DELETE FROM sessions WHERE timestamp < ?", (cutoff,)
+        )
+        self._conn.commit()
+        deleted = result.rowcount
+        if deleted:
+            # Evict stale sessions from the in-memory cache too
+            self._sessions.clear()
+            logger.info(f"Session pruner: removed {deleted} messages older than {keep_days} days")
+        return deleted
+
+    async def prune_session(self, session_id: str, keep_last: int = 200) -> None:
+        """Keep only the most recent keep_last messages for one session.
+
+        Prevents a single long-running session from consuming unbounded space.
+        """
+        rows = self._conn.execute(
+            "SELECT id FROM sessions WHERE session_id = ? ORDER BY timestamp DESC LIMIT -1 OFFSET ?",
+            (session_id, keep_last),
+        ).fetchall()
+        if rows:
+            ids = [r[0] for r in rows]
+            self._conn.execute(
+                f"DELETE FROM sessions WHERE id IN ({','.join('?' * len(ids))})", ids
+            )
+            self._conn.commit()
+            self._sessions.pop(session_id, None)  # invalidate cache
 
     async def close(self) -> None:
         if self._conn:
