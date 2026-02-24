@@ -148,11 +148,23 @@ class WeatherSkill(BaseSkill):
             return SkillResult(content=f"天氣查詢失敗: {e}", success=False, source=self.name)
 
     def _extract_city(self, query: str) -> str:
-        """Extract city name, strip triggers and filler words."""
+        """Extract city name from query."""
+        # Priority 1: scan for known CJK cities directly in original text
+        for zh, en in self._CITY_MAP.items():
+            if zh in query:
+                return en
+
+        # Priority 2: English capitalized city name
+        m = re.search(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b', query)
+        if m:
+            return m.group(1)
+
+        # Fallback: strip triggers and fillers then return remainder
         text = query
         for t in self.triggers:
             text = re.sub(re.escape(t), "", text, flags=re.IGNORECASE)
         for f in self._FILLER:
             text = text.replace(f, "")
+        text = re.sub(r'[查幫我一下問]+', "", text)
         text = text.strip(" ?？，,。.、！!　\t\n")
         return self._CITY_MAP.get(text, text) if text else ""
