@@ -1,13 +1,16 @@
-"""LiteLLM wrapper with budget checking for all LLM calls."""
+"""LLM provider with Google GenAI SDK (primary) and LiteLLM fallback."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
 from typing import Any, AsyncIterator
 
 import litellm
+from google import genai
+from google.genai import types as genai_types
 
 from nexus.core.budget import BudgetController, BudgetExhausted
 from nexus.providers.model_config import ModelRouter, ModelSpec
@@ -18,6 +21,10 @@ logger = logging.getLogger(__name__)
 litellm.set_verbose = False
 
 _GITHUB_API_BASE = "https://models.inference.ai.azure.com"
+
+# Configure Google GenAI SDK client
+_gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
+_genai_client = genai.Client(api_key=_gemini_api_key) if _gemini_api_key else None
 
 
 class LLMProvider:
@@ -42,6 +49,53 @@ class LLMProvider:
         # remaining chars (spaces, digits, punctuation)
         other_chars = max(0, len(text) - cjk - sum(len(w) for w in re.findall(r"[a-zA-Z]+", text)))
         return max(1, int(cjk * 1.0 + en_words * 1.3 + other_chars * 0.3))
+
+    @staticmethod
+    def _is_gemini(spec: ModelSpec) -> bool:
+        """Check if the model should use Google GenAI SDK directly."""
+        return spec.model_id.startswith("gemini/") and not spec.api_base
+
+    @staticmethod
+    def _gemini_model_name(spec: ModelSpec) -> str:
+        """Strip 'gemini/' prefix for Google GenAI SDK."""
+        return spec.model_id.removeprefix("gemini/")
+
+    async def _gemini_complete(
+        self,
+        spec: ModelSpec,
+        messages: list[dict],
+        max_tokens: int,
+        temperature: float,
+    ) -> str:
+        """Call Gemini using the official Google GenAI SDK (google-genai)."""
+        if not _genai_client:
+            raise RuntimeError("GEMINI_API_KEY not set — cannot use Google GenAI SDK")
+
+        model_name = self._gemini_model_name(spec)
+        system_prompt = None
+        user_parts = []
+
+        for m in messages:
+            if m["role"] == "system":
+                system_prompt = m["content"]
+            else:
+                user_parts.append(m["content"])
+
+        prompt = "\n".join(user_parts)
+
+        config = genai_types.GenerateContentConfig(
+            max_output_tokens=max_tokens,
+            temperature=temperature,
+            system_instruction=system_prompt,
+        )
+
+        response = await asyncio.to_thread(
+            _genai_client.models.generate_content,
+            model=model_name,
+            contents=prompt,
+            config=config,
+        )
+        return response.text or ""
 
     @staticmethod
     def _extra_kwargs(spec: ModelSpec) -> dict:
@@ -81,18 +135,28 @@ class LLMProvider:
         messages.append({"role": "user", "content": prompt})
 
         try:
-            response = await litellm.acompletion(
-                model=spec.model_id,
-                messages=messages,
-                max_tokens=mt,
-                temperature=temperature if temperature is not None else spec.temperature,
-                timeout=60,  # hard cap: never hang more than 60 s
-                **self._extra_kwargs(spec),
-            )
-            content = response.choices[0].message.content or ""
-            # Track actual usage
-            usage = response.usage
-            total_tokens = (usage.total_tokens if usage else tokens_est + self._count_tokens(content))
+            if self._is_gemini(spec):
+                # Use Google GenAI SDK for Gemini models
+                logger.debug(f"Using Google GenAI SDK for {spec.model_id}")
+                content = await self._gemini_complete(
+                    spec=spec,
+                    messages=messages,
+                    max_tokens=mt,
+                    temperature=temperature if temperature is not None else spec.temperature,
+                )
+            else:
+                # Use LiteLLM for all other models
+                response = await litellm.acompletion(
+                    model=spec.model_id,
+                    messages=messages,
+                    max_tokens=mt,
+                    temperature=temperature if temperature is not None else spec.temperature,
+                    timeout=60,
+                    **self._extra_kwargs(spec),
+                )
+                content = response.choices[0].message.content or ""
+
+            total_tokens = tokens_est + self._count_tokens(content)
             await self.budget.consume_tokens(total_tokens, source=source, metadata={
                 "model": spec.model_id,
                 "task_type": task_type,
