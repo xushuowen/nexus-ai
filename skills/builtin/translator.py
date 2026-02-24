@@ -32,7 +32,7 @@ class TranslatorSkill(BaseSkill):
     async def execute(self, query: str, context: dict[str, Any]) -> SkillResult:
         llm = context.get("llm")
         if not llm:
-            return SkillResult(content="LLM not available", success=False, source=self.name)
+            return SkillResult(content="⚠️ LLM 尚未初始化，無法執行翻譯。", success=False, source=self.name)
 
         prompt = (
             "You are a professional translator. "

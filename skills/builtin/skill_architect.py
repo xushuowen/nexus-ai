@@ -17,13 +17,32 @@ from typing import Any
 
 from nexus.skills.skill_base import BaseSkill, SkillResult
 
-# Forbidden imports for safety
+# Forbidden patterns — covers direct imports, dynamic dispatch, and scope-escape tricks
 FORBIDDEN_PATTERNS = [
-    r"import\s+os\b", r"import\s+subprocess", r"import\s+shutil",
-    r"from\s+os\s+import", r"from\s+subprocess\s+import",
-    r"__import__", r"eval\s*\(", r"exec\s*\(",
-    r"open\s*\(.*(w|a|x)", r"rmtree", r"unlink",
-    r"system\s*\(", r"popen\s*\(",
+    # Dangerous stdlib modules
+    r"import\s+os\b", r"from\s+os\b", r"import\s+os\.path",
+    r"import\s+subprocess", r"from\s+subprocess\b",
+    r"import\s+shutil", r"from\s+shutil\b",
+    r"import\s+socket", r"from\s+socket\b",
+    r"import\s+ctypes", r"from\s+ctypes\b",
+    r"import\s+signal", r"from\s+signal\b",
+    r"import\s+pty", r"import\s+ptyprocess",
+    # Dynamic code execution
+    r"eval\s*\(", r"exec\s*\(", r"compile\s*\(",
+    r"__import__\s*\(",
+    # Dynamic attribute / scope introspection
+    r"getattr\s*\(", r"setattr\s*\(", r"delattr\s*\(",
+    r"globals\s*\(", r"locals\s*\(", r"vars\s*\(",
+    r"__builtins__", r"__globals__", r"__class__",
+    # Dynamic import
+    r"importlib\b",
+    # File-write operations
+    r'open\s*\([^)]*["\'][wa+xb]+["\']',
+    r"\.write\s*\(", r"rmtree", r"unlink\s*\(",
+    r"\.remove\s*\(", r"os\.remove",
+    # Shell / process spawn
+    r"system\s*\(", r"popen\s*\(", r"Popen\s*\(",
+    r"call\s*\(\[", r"check_output\s*\(",
 ]
 
 SKILL_TEMPLATE = '''"""Auto-generated skill: {name}."""
@@ -169,7 +188,7 @@ class SkillArchitectSkill(BaseSkill):
         violations = []
         for pattern in FORBIDDEN_PATTERNS:
             if re.search(pattern, code):
-                violations.append(f"Forbidden pattern: {pattern}")
+                violations.append(f"不允許的模式：{pattern}")
         return violations
 
     def _extract_skill_name(self, code: str) -> str | None:

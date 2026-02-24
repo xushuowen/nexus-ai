@@ -142,4 +142,4 @@ class GitHubSkill(BaseSkill):
             return SkillResult(content="\n".join(lines), success=True, source=self.name)
 
         except Exception as e:
-            return SkillResult(content=f"Trending 取得失敗: {e}", success=False, source=self.name)
+            return SkillResult(content=f"Trending 資料取得失敗：{e}", success=False, source=self.name)

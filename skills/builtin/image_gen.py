@@ -25,7 +25,7 @@ class ImageGenSkill(BaseSkill):
     async def execute(self, query: str, context: dict[str, Any]) -> SkillResult:
         llm = context.get("llm")
         if not llm:
-            return SkillResult(content="LLM not available", success=False, source=self.name)
+            return SkillResult(content="⚠️ LLM 尚未初始化，無法生成圖片描述。", success=False, source=self.name)
 
         # Clean query
         for t in self.triggers:
@@ -62,4 +62,4 @@ class ImageGenSkill(BaseSkill):
             return SkillResult(content=result, success=True, source=self.name)
 
         except Exception as e:
-            return SkillResult(content=f"Prompt 生成失敗: {e}", success=False, source=self.name)
+            return SkillResult(content=f"圖片 Prompt 生成失敗：{e}", success=False, source=self.name)

@@ -29,7 +29,7 @@ class SummarizeSkill(BaseSkill):
     async def execute(self, query: str, context: dict[str, Any]) -> SkillResult:
         llm = context.get("llm")
         if not llm:
-            return SkillResult(content="LLM not available", success=False, source=self.name)
+            return SkillResult(content="⚠️ LLM 尚未初始化，無法執行摘要。", success=False, source=self.name)
 
         prompt = (
             f"請將以下內容做精簡摘要，用繁體中文回覆，列出 3-5 個重點：\n\n{query}"

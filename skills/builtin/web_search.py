@@ -40,7 +40,7 @@ class WebSearchSkill(BaseSkill):
             url = f"https://html.duckduckgo.com/html/?q={query}"
             safe, reason = is_url_safe(url)
             if not safe:
-                return SkillResult(content=f"URL blocked: {reason}", success=False, source=self.name)
+                return SkillResult(content=f"URL 被封鎖：{reason}", success=False, source=self.name)
 
             async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
                 resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
