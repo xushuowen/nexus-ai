@@ -24,6 +24,8 @@ from nexus.providers.llm_provider import LLMProvider
 from nexus.providers.model_config import ModelRouter
 from nexus.memory.hybrid_store import HybridMemory
 from nexus.gateway.telegram_channel import TelegramChannel
+from nexus.gateway.hub import MessageHub
+from nexus.gateway.api_channel import init_api_channel, set_memory as _set_api_memory
 from nexus.security.auth import verify_request, verify_websocket, require_auth, get_api_key
 from nexus.security.rate_limiter import RateLimiter
 from nexus.skills.skill_loader import SkillLoader
@@ -54,6 +56,10 @@ _schedule_runner: ScheduleRunner | None = None
 # Use asyncio.Event instead of a plain bool so waiters can block on it
 # (created in lifespan so the event loop is already running).
 _init_event: asyncio.Event | None = None
+
+# ── API Channel (MessageHub + REST router, wired in lifespan) ──
+_hub = MessageHub()
+_api_v1_router = init_api_channel(_hub)
 
 
 async def _morning_report_check(orch, tg) -> None:
@@ -125,7 +131,8 @@ async def _deferred_init(llm, mem, orch, tg, bdg):
 
         orch.set_memory(mem)
 
-        # Inject memory into memory_manager skill if loaded
+        # Inject memory into api_channel and memory_manager skill
+        _set_api_memory(mem)
         if skill_loader:
             mm_skill = next(
                 (s for s in skill_loader.list_skills() if s.name == "memory_manager"), None
@@ -142,6 +149,22 @@ async def _deferred_init(llm, mem, orch, tg, bdg):
             await tg.start()
         except Exception as e:
             logger.warning(f"Telegram start failed: {e}")
+
+        # Budget warning: send Telegram push when usage crosses warning_threshold
+        async def _budget_warning(ratio: float) -> None:
+            pct = int(ratio * 100)
+            msg = (
+                f"⚠️ **預算警告**\n\n"
+                f"今日 Token 使用量已達 **{pct}%**，"
+                f"接近每日上限 ({bdg.daily_limit:,} tokens)。\n"
+                f"剩餘：{bdg.tokens_remaining:,} tokens"
+            )
+            try:
+                await tg.send_to_owner(msg)
+            except Exception as e:
+                logger.warning(f"Budget warning notification failed: {e}")
+
+        bdg.set_warning_callback(_budget_warning)
 
         if _init_event is not None:
             _init_event.set()
@@ -178,6 +201,9 @@ async def lifespan(app: FastAPI):
 
     # Initialize lightweight components immediately
     rate_limiter = RateLimiter()
+    # Pass rate_limiter into api_channel (router already registered at module load)
+    from nexus.gateway import api_channel as _api_ch
+    _api_ch._rate_limiter = rate_limiter
     budget = BudgetController()
     router = ModelRouter()
     llm = LLMProvider(budget, router)
@@ -197,6 +223,9 @@ async def lifespan(app: FastAPI):
     logger.info(f"Loaded {len(registry.list_agents())} agents: {[a.name for a in registry.list_agents()]}")
 
     orchestrator = Orchestrator(budget, llm, router, registry)
+
+    # Wire MessageHub to orchestrator (api_channel router already registered at module load)
+    _hub.set_orchestrator(orchestrator)
 
     # Initialize skill system
     skill_loader = SkillLoader()
@@ -258,6 +287,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Nexus AI", version="0.1.0", lifespan=lifespan)
+
+# Mount REST API channel (hub wired to orchestrator in lifespan)
+app.include_router(_api_v1_router)
 
 # Mount static files
 web_dir = Path(__file__).parent / "web"

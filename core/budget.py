@@ -5,7 +5,7 @@ import json
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Awaitable
 
 from nexus import config
 
@@ -34,6 +34,9 @@ class BudgetController:
         self._history: list[dict[str, Any]] = []
         self._lock = asyncio.Lock()
         self._state_path = config.data_dir() / "budget_state.json"
+        # Warning callback: fired once per day when usage crosses warning_threshold
+        self._on_warning: Callable[[float], Awaitable[None]] | None = None
+        self._warning_sent: bool = False
         self._load_state()
 
     def _load_state(self) -> None:
@@ -76,12 +79,17 @@ class BudgetController:
                 return True
         return False
 
+    def set_warning_callback(self, cb: Callable[[float], Awaitable[None]]) -> None:
+        """Register an async callback fired once when usage crosses warning_threshold."""
+        self._on_warning = cb
+
     def _reset(self) -> None:
         self._tokens_used = 0
         self._curiosity_ops_used = 0
         self._request_count = 0
         self._last_reset = datetime.now()
         self._history.clear()
+        self._warning_sent = False  # allow warning to fire again next day
 
     async def check_and_maybe_reset(self) -> None:
         async with self._lock:
@@ -99,6 +107,7 @@ class BudgetController:
 
     async def consume_tokens(self, tokens: int, source: str = "user", metadata: dict | None = None) -> None:
         """Record actual token consumption after an LLM call."""
+        fire_warning = False
         async with self._lock:
             self._tokens_used += tokens
             self._request_count += 1
@@ -112,6 +121,13 @@ class BudgetController:
             if len(self._history) > 500:
                 self._history = self._history[-500:]
             self._save_state()
+            # Check if we just crossed the warning threshold for the first time today
+            if self.is_warning and not self._warning_sent and self._on_warning:
+                self._warning_sent = True
+                fire_warning = True
+
+        if fire_warning and self._on_warning:
+            asyncio.create_task(self._on_warning(self.usage_ratio))
 
     async def request_curiosity_op(self, estimated_tokens: int) -> bool:
         """Request permission for a curiosity engine operation."""
