@@ -11,7 +11,14 @@ from nexus.skills.skill_base import BaseSkill, SkillResult
 class WebSearchSkill(BaseSkill):
     name = "web_search"
     description = "網路搜尋 — 使用 DuckDuckGo（免費，不需要 API key）"
-    triggers = ["搜尋", "search", "查一下", "google", "找一下", "look up", "查詢"]
+    triggers = ["搜尋", "search", "查一下", "google", "找一下", "look up", "查詢", "幫我找", "網路查"]
+    intent_patterns = [
+        r"(我想知道|想了解|幫我查|想查).{2,30}",
+        r"(有沒有|有關|關於).{2,20}(資料|資訊|消息|介紹)",
+        r"(最新|現在).{0,5}(有什麼|發生了|怎麼了).{0,15}",
+        r"(什麼是|誰是|哪裡有|怎麼).{2,25}",
+        r"(幫我|請).{0,5}(找|查|搜).{2,20}",
+    ]
     category = "web"
     requires_llm = False
 

@@ -14,6 +14,12 @@ class SysInfoSkill(BaseSkill):
     name = "sysinfo"
     description = "系統資訊 — 顯示作業系統、硬體和 Nexus 狀態"
     triggers = ["系統", "system", "sysinfo", "硬體", "hardware", "系統資訊"]
+    intent_patterns = [
+        r"(電腦|系統|主機).{0,10}(狀態|資訊|怎樣|情況|用了多少|還好嗎)",
+        r"(記憶體|CPU|磁碟|硬碟|ram).{0,10}(用了多少|使用率|還有多少|剩餘|狀態)",
+        r"(nexus|系統).{0,5}(狀況|健康|運行|怎樣了)",
+        r"現在.{0,5}(電腦|系統|主機|cpu).{0,10}(怎樣|如何|狀態|負載)",
+    ]
     category = "utility"
     requires_llm = False
 

@@ -44,6 +44,13 @@ class StudyNotesSkill(BaseSkill):
     name = "study_notes"
     description = "筆記系統 — 物理治療專用分科筆記、複習、搜尋"
     triggers = ["筆記", "note", "複習", "review notes", "整理", "study", "考試", "exam", "notes"]
+    intent_patterns = [
+        r"(記一下|記錄|紀錄).{2,40}",
+        r"(解剖學|生理學|運動學|治療學|病理學|骨科|神經|心肺|小兒|老人|生物力學|電療|徒手治療).{2,40}",
+        r"(複習|背一下|練習).{0,5}(解剖|骨科|神經|心肺|生理|運動學)",
+        r"(考試|出題|練習題).{0,10}(解剖|骨科|神經|物理治療)",
+        r"(我的|看我的|列出).{0,5}(筆記|科目|notes)",
+    ]
     category = "academic"
     requires_llm = False
 

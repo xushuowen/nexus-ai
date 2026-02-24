@@ -84,6 +84,14 @@ class AcademicSearchSkill(BaseSkill):
         "4. 搜尋後可說「存到骨科筆記」儲存結果"
     )
 
+    intent_patterns = [
+        r"(找|查|搜).{0,5}(相關|有關|關於).{0,15}(論文|研究|文獻|期刊)",
+        r"(有沒有|有什麼).{0,10}(研究|論文|文獻).{0,10}(關於|有關|針對)",
+        r"(PubMed|pubmed|Semantic Scholar).{0,20}",
+        r"(ACL|PCL|半月板|旋轉肌|椎間盤|前十字韌帶|後十字韌帶).{0,20}(研究|論文|文獻|復健|治療)",
+        r"(物理治療|復健|PT).{0,10}(研究|論文|實證|evidence)",
+    ]
+
     # Filler words to strip from query before searching
     _FILLER = ["查有關", "查一下", "找一下", "幫我找", "幫我查", "相關的", "相關",
                "有哪些", "有沒有", "的論文", "的期刊", "的研究", "的文獻",

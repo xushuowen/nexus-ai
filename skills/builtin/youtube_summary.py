@@ -11,7 +11,13 @@ from nexus.skills.skill_base import BaseSkill, SkillResult
 class YouTubeSummarySkill(BaseSkill):
     name = "youtube_summary"
     description = "YouTube 影片摘要 — 提取影片資訊並用 AI 生成摘要"
-    triggers = ["youtube", "影片摘要", "yt", "視頻", "影片"]
+    triggers = ["youtube", "youtu.be", "影片摘要", "yt", "視頻", "影片"]
+    intent_patterns = [
+        r"https?://(www\.)?(youtube\.com|youtu\.be)/\S+",
+        r"(幫我|請).{0,5}(看|分析|摘要|總結|整理).{0,10}(影片|視頻|youtube)",
+        r"(這支|這個|這部).{0,5}(影片|視頻).{0,10}(說|講|在說|的重點)",
+        r"(youtube|影片).{0,10}(重點|摘要|總結|幫我看)",
+    ]
     category = "media"
     requires_llm = True
 

@@ -12,6 +12,13 @@ class GitHubSkill(BaseSkill):
     name = "github"
     description = "GitHub — 搜尋 repo、查看專案資訊（免費 API）"
     triggers = ["github", "repo", "開源", "star", "repository", "gh"]
+    intent_patterns = [
+        r"(幫我|請).{0,5}(找|搜|查).{0,10}(github|開源|repo|程式庫)",
+        r"(github|開源|repo).{0,15}(有沒有|找找|搜尋|推薦|熱門)",
+        r"(最多star|熱門|流行|trending).{0,10}(repo|開源|專案|程式庫)",
+        r"(有什麼|哪些).{0,10}(好用|推薦|流行).{0,10}(開源|程式庫|框架|工具)",
+        r"github.{0,5}(search|trending|搜尋|熱門)",
+    ]
     category = "development"
     requires_llm = False
 

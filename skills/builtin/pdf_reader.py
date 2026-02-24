@@ -13,7 +13,12 @@ from nexus import config
 class PDFReaderSkill(BaseSkill):
     name = "pdf_reader"
     description = "PDF 閱讀器 — 讀取本地 PDF 檔案並提取文字"
-    triggers = ["pdf", "讀pdf", "read pdf", "解析pdf", "open pdf", "PDF"]
+    triggers = ["pdf", "讀pdf", "read pdf", "解析pdf", "open pdf", "PDF", ".pdf"]
+    intent_patterns = [
+        r"(讀|看|打開|分析|解析|幫我看).{0,10}\.pdf",
+        r"(幫我|請).{0,5}(讀|看|開啟|分析).{0,10}(文件|PDF|報告|論文)",
+        r"(這個|這份|這篇).{0,5}(PDF|文件|報告).{0,10}(說什麼|重點|內容)",
+    ]
     category = "document"
     requires_llm = False
 

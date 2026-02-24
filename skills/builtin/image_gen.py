@@ -11,7 +11,12 @@ from nexus.skills.skill_base import BaseSkill, SkillResult
 class ImageGenSkill(BaseSkill):
     name = "image_gen"
     description = "圖片生成 — 用 AI 生成詳細圖片描述 prompt"
-    triggers = ["畫", "draw", "生成圖片", "image", "generate image", "圖片", "插圖"]
+    triggers = ["畫", "draw", "生成圖片", "image", "generate image", "圖片", "插圖", "繪製"]
+    intent_patterns = [
+        r"(幫我|請).{0,5}(畫|生成|做|繪製).{0,20}(圖|插圖|圖片|圖像)",
+        r"(我想要|想看|想要一張).{0,15}(圖|插畫|圖片|圖像)",
+        r"(畫一張|生成一張|做一張).{0,20}",
+    ]
     category = "creative"
     requires_llm = True
 

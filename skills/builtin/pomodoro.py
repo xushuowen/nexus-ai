@@ -15,6 +15,12 @@ class PomodoroSkill(BaseSkill):
     name = "pomodoro"
     description = "番茄鐘 — 專注計時、記錄工作時段"
     triggers = ["番茄鐘", "pomodoro", "計時", "timer", "專注", "focus"]
+    intent_patterns = [
+        r"(我要|幫我|開始).{0,5}(專注|讀書|工作|計時|番茄)",
+        r"(專注|讀書|工作).{0,5}(25分鐘|一個番茄|計時器|模式)",
+        r"(休息|停止|結束).{0,5}(計時|番茄|專注)",
+        r"(今天|這週).{0,5}(專注了幾|幾個番茄|讀了多久)",
+    ]
     category = "productivity"
     requires_llm = False
 

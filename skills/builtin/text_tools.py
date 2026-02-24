@@ -16,6 +16,13 @@ class TextToolsSkill(BaseSkill):
     description = "文字工具 — 字數統計、Base64、JSON 格式化等"
     triggers = ["字數", "word count", "base64", "json格式", "text tool", "字元",
                 "統計", "encode", "decode", "格式化", "format json"]
+    intent_patterns = [
+        r"(這段文字|這篇|以下|這些).{0,10}(有幾個|有多少)(字|字元|單字|字數)",
+        r"幫我.{0,5}(數|統計|計算).{0,10}(字數|字元|字)",
+        r"(base64|Base64).{0,10}(編碼|解碼|轉換|encode|decode)",
+        r"(json|JSON).{0,10}(格式化|排版|美化|格式|整理)",
+        r"(這段|這個).{0,10}(有幾字|字數是|共幾個字)",
+    ]
     category = "utility"
     requires_llm = False
 
