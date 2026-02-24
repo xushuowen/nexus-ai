@@ -32,20 +32,20 @@ orchestrator:
 
 providers:
   primary: "gemini-flash"
-  fallback: "gemini-pro"
+  fallback: "groq-llama"
   models:
     gemini-flash:
-      model_id: "gemini/gemini-2.0-flash-exp"
+      model_id: "gemini/gemini-2.0-flash"
       max_tokens: 4096
       temperature: 0.7
       use_for: ["general", "routing", "simple_tasks", "classification", "analysis"]
     gemini-pro:
-      model_id: "gemini/gemini-1.5-pro-latest"
+      model_id: "gemini/gemini-2.0-flash"
       max_tokens: 8192
       temperature: 0.7
       use_for: ["complex_reasoning", "code_generation"]
     gemini-vision:
-      model_id: "gemini/gemini-2.0-flash-exp"
+      model_id: "gemini/gemini-2.0-flash"
       max_tokens: 4096
       temperature: 0.7
       use_for: ["vision"]
@@ -59,7 +59,7 @@ providers:
       model_id: "groq/llama-3.3-70b-versatile"
       max_tokens: 2000
       temperature: 0.7
-      use_for: []
+      use_for: ["fallback"]
 
 security:
   sandbox_enabled: true

@@ -52,7 +52,7 @@ class GitHubSkill(BaseSkill):
             url = "https://api.github.com/search/repositories"
             params = {"q": query, "sort": "stars", "per_page": 5}
             async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(url, headers={"Accept": "application/vnd.github.v3+json"})
+                resp = await client.get(url, params=params, headers={"Accept": "application/vnd.github.v3+json"})
                 resp.raise_for_status()
                 data = resp.json()
 
@@ -120,7 +120,7 @@ class GitHubSkill(BaseSkill):
             url = "https://api.github.com/search/repositories"
             params = {"q": f"created:>{since}", "sort": "stars", "per_page": 8}
             async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(url, headers={"Accept": "application/vnd.github.v3+json"})
+                resp = await client.get(url, params=params, headers={"Accept": "application/vnd.github.v3+json"})
                 resp.raise_for_status()
                 data = resp.json()
 
