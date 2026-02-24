@@ -61,6 +61,10 @@ class WebAgent(BaseAgent):
             async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
                 resp = await client.get(url)
                 resp.raise_for_status()
+                # Reject responses that are too large (> 5 MB) to avoid memory exhaustion
+                content_length = int(resp.headers.get("content-length", 0))
+                if content_length > 5_000_000:
+                    return f"Content too large ({content_length // 1024:,} KB). Only pages under 5 MB are supported."
                 # Simple HTML to text
                 text = resp.text
                 import re

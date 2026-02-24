@@ -36,11 +36,8 @@
             </div>
 
             <nav id="dash-tabs">
-                <a href="/" class="tab-link">
-                    <svg viewBox="0 0 16 16" width="11" height="11"><polygon points="8,1 15,8 8,15 1,8" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
-                    NEURAL LINK
-                </a>
                 <button class="tab-btn active" data-tab="main">主控台</button>
+                <button class="tab-btn" data-tab="chat">對話</button>
                 <button class="tab-btn" data-tab="skills">技能演化</button>
             </nav>
 
@@ -174,6 +171,85 @@
                             <button class="qa-btn" onclick="openChat('天氣')">查看天氣</button>
                             <button class="qa-btn" onclick="openChat('提醒 列出')">待辦清單</button>
                             <button class="qa-btn" onclick="openChat('生成晨報')">生成晨報</button>
+                        </div>
+                    </div>
+                </aside>
+
+            </div>
+        </div>
+
+        <!-- ═══ Tab: CHAT ═══ -->
+        <div id="tab-chat" class="tab-content">
+            <div class="chat-layout">
+
+                <!-- Left: Analysis log -->
+                <aside class="chat-side chat-side-left">
+                    <div class="chat-side-inner">
+                        <div class="gp-title">
+                            ANALYSIS LOG &nbsp;<span class="sage-tag">大賢者</span>
+                        </div>
+                        <div id="d-thinking-log" class="chat-think-log"></div>
+                    </div>
+                </aside>
+
+                <!-- Center: Messages + Input -->
+                <main class="chat-center">
+                    <div id="d-messages">
+                        <div class="sage-notification">
+                            <div class="sage-notify-border">
+                                <div class="sage-notify-content">
+                                    <div class="sage-notify-title">Neural Link Established</div>
+                                    <div class="sage-notify-body">Multi-agent system active. All channels operational.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="d-input-area">
+                        <div class="input-frame">
+                            <div class="input-glow"></div>
+                            <textarea id="d-user-input" placeholder="Enter command..." rows="2"></textarea>
+                            <button id="d-send-btn" onclick="dSendMessage()">
+                                <svg viewBox="0 0 24 24" width="20" height="20">
+                                    <path d="M2 21l21-9L2 3v7l15 2-15 2z" fill="currentColor"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </main>
+
+                <!-- Right: Active agent + session -->
+                <aside class="chat-side chat-side-right">
+                    <div class="chat-side-inner">
+                        <div class="gp-title">ACTIVE PROCESS</div>
+                        <div id="d-active-agent">
+                            <div class="agent-idle">
+                                <div class="idle-diamond">
+                                    <svg viewBox="0 0 40 40">
+                                        <polygon points="20,2 38,20 20,38 2,20" fill="none" stroke="currentColor" stroke-width="1"/>
+                                    </svg>
+                                </div>
+                                <span>Awaiting Input</span>
+                            </div>
+                        </div>
+
+                        <div class="gp-title" style="margin-top:16px">SESSION</div>
+                        <div class="status-grid">
+                            <div class="status-item">
+                                <span class="si-label">ID</span>
+                                <span class="si-value" id="d-session-id">--</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="si-label">Msgs</span>
+                                <span class="si-value" id="d-msg-count">0</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="si-label">WS</span>
+                                <span class="si-value" id="d-ws-status">—</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="si-label">Skill</span>
+                                <span class="si-value" id="d-last-skill">—</span>
+                            </div>
                         </div>
                     </div>
                 </aside>

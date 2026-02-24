@@ -102,6 +102,8 @@ class StudyNotesSkill(BaseSkill):
 
     def _add(self, content: str) -> SkillResult:
         """Add a new note."""
+        if self._conn is None:
+            return SkillResult(content="筆記系統尚未初始化，請稍後再試。", success=False, source=self.name)
         for t in self.triggers:
             content = content.replace(t, "").strip()
         content = content.strip(" ：:")
@@ -136,6 +138,8 @@ class StudyNotesSkill(BaseSkill):
 
     def _search(self, query: str) -> SkillResult:
         """Search notes by keyword."""
+        if self._conn is None:
+            return SkillResult(content="筆記系統尚未初始化，請稍後再試。", success=False, source=self.name)
         for prefix in ["搜尋", "search", "找", "筆記"]:
             query = query.replace(prefix, "").strip()
         query = query.strip()
@@ -143,9 +147,11 @@ class StudyNotesSkill(BaseSkill):
         if not query:
             return SkillResult(content="請提供搜尋關鍵字。", success=False, source=self.name)
 
+        # Escape LIKE special characters to prevent wildcard injection
+        safe_query = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         rows = self._conn.execute(
-            "SELECT id, subject, content, date FROM notes WHERE content LIKE ? ORDER BY timestamp DESC LIMIT 15",
-            (f"%{query}%",),
+            "SELECT id, subject, content, date FROM notes WHERE content LIKE ? ESCAPE '\\' ORDER BY timestamp DESC LIMIT 15",
+            (f"%{safe_query}%",),
         ).fetchall()
 
         if not rows:
@@ -162,6 +168,8 @@ class StudyNotesSkill(BaseSkill):
 
     def _list_subjects(self) -> SkillResult:
         """List all subjects and note counts."""
+        if self._conn is None:
+            return SkillResult(content="筆記系統尚未初始化，請稍後再試。", success=False, source=self.name)
         rows = self._conn.execute(
             "SELECT subject, COUNT(*) as cnt FROM notes GROUP BY subject ORDER BY cnt DESC"
         ).fetchall()
@@ -180,6 +188,8 @@ class StudyNotesSkill(BaseSkill):
 
     def _review(self, query: str) -> SkillResult:
         """Review notes for a subject."""
+        if self._conn is None:
+            return SkillResult(content="筆記系統尚未初始化，請稍後再試。", success=False, source=self.name)
         subject = "general"
         for keyword, subj in PT_SUBJECTS.items():
             if keyword in query.lower():
@@ -205,6 +215,8 @@ class StudyNotesSkill(BaseSkill):
 
     async def _generate_quiz(self, query: str, context: dict[str, Any]) -> SkillResult:
         """Generate quiz questions from notes (requires LLM)."""
+        if self._conn is None:
+            return SkillResult(content="筆記系統尚未初始化，請稍後再試。", success=False, source=self.name)
         llm = context.get("llm")
 
         # Find subject
@@ -249,6 +261,8 @@ class StudyNotesSkill(BaseSkill):
 
     def _export(self, query: str) -> SkillResult:
         """Export notes for a subject."""
+        if self._conn is None:
+            return SkillResult(content="筆記系統尚未初始化，請稍後再試。", success=False, source=self.name)
         subject = "general"
         for keyword, subj in PT_SUBJECTS.items():
             if keyword in query.lower():

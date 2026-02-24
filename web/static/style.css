@@ -894,6 +894,96 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: var(--accent-glow); }
 
 /* ═══════════════════════════════════════
+   Dashboard Chat Tab: input aliases
+   (re-use same rules as #user-input / #send-btn)
+   ═══════════════════════════════════════ */
+#d-user-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    padding: 8px 12px;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    resize: none;
+    outline: none;
+    line-height: 1.5;
+}
+#d-user-input::placeholder { color: var(--text-dim); }
+
+#d-send-btn {
+    width: 40px; height: 36px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+#d-send-btn:hover {
+    background: var(--accent);
+    color: var(--bg-void);
+    box-shadow: 0 0 12px var(--accent-glow);
+}
+#d-send-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+/* ═══════════════════════════════════════
+   Markdown rendered content (both pages)
+   ═══════════════════════════════════════ */
+.message.assistant .bubble h2.md-h2,
+.message.assistant .bubble h3.md-h3,
+.message.assistant .bubble h4.md-h4 {
+    font-family: var(--font-title);
+    color: var(--accent);
+    letter-spacing: 1px;
+    margin: 10px 0 4px;
+    text-shadow: 0 0 8px var(--accent-dim);
+}
+.message.assistant .bubble h2.md-h2 { font-size: 16px; }
+.message.assistant .bubble h3.md-h3 { font-size: 14px; }
+.message.assistant .bubble h4.md-h4 { font-size: 13px; color: var(--accent2); }
+
+.message.assistant .bubble ul {
+    margin: 6px 0 6px 14px;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.message.assistant .bubble li {
+    position: relative;
+    padding-left: 12px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+.message.assistant .bubble li::before {
+    content: '◆';
+    position: absolute;
+    left: 0;
+    font-size: 6px;
+    top: 4px;
+    color: var(--accent);
+}
+.message.assistant .bubble li.ol::before { content: '›'; font-size: 12px; top: 0; }
+
+.message.assistant .bubble hr.md-hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 10px 0;
+    opacity: 0.6;
+}
+
+/* ═══════════════════════════════════════
    Responsive
    ═══════════════════════════════════════ */
 @media (max-width: 1024px) {

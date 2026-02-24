@@ -89,8 +89,11 @@ class PDFReaderSkill(BaseSkill):
 
     def _resolve_path(self, file_path: str) -> Path | None:
         """Resolve PDF path within allowed directories."""
+        # Security: reject absolute paths and path traversal attempts
+        if Path(file_path).is_absolute() or ".." in file_path:
+            return None
+
         candidates = [
-            Path(file_path),
             config.data_dir() / file_path,
             config.data_dir() / "workspace" / file_path,
             Path.cwd() / file_path,

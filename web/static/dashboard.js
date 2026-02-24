@@ -138,8 +138,23 @@ function updateBrief(schedules) {
 
 // ─── Quick Access ────────────────────────────────────────
 function openChat(query) {
-    // Navigate to main chat page and pre-fill query via URL param
-    window.location.href = '/?q=' + encodeURIComponent(query);
+    // Switch to chat tab
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelector('[data-tab="chat"]')?.classList.add('active');
+    document.getElementById('tab-chat')?.classList.add('active');
+
+    // Ensure WS is connected, then send query
+    const sendQuery = () => {
+        if (!query) return;
+        const inp = document.getElementById('d-user-input');
+        if (inp) { inp.value = query; dSendMessage(); }
+    };
+    if (dWs && dWs.readyState === WebSocket.OPEN) {
+        sendQuery();
+    } else {
+        dConnectWs(sendQuery);
+    }
 }
 
 // ─── ResizeObserver for skill graph ─────────────────────
@@ -165,8 +180,10 @@ function setupTabs() {
             document.getElementById('tab-' + tab).classList.add('active');
 
             if (tab === 'skills' && dashData && !graphRendered) {
-                // Slight delay so the container is visible/sized
                 setTimeout(() => renderSkillGraph(dashData.skills || []), 50);
+            }
+            if (tab === 'chat' && (!dWs || dWs.readyState > WebSocket.OPEN)) {
+                dConnectWs();
             }
         });
     });
@@ -480,3 +497,239 @@ function escHtml(str) {
 function hexR(hex) { return parseInt(hex.slice(1, 3), 16) / 255; }
 function hexG(hex) { return parseInt(hex.slice(3, 5), 16) / 255; }
 function hexB(hex) { return parseInt(hex.slice(5, 7), 16) / 255; }
+
+// ═══════════════════════════════════════════════════════
+//  Dashboard Chat Module
+// ═══════════════════════════════════════════════════════
+
+let dWs = null;
+let dSessionId = 'ds_' + Date.now();
+let dIsProcessing = false;
+let dMsgCount = 0;
+let dWsReady = false;
+
+// ─── Initialize chat input listener ─────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    setText('d-session-id', dSessionId.slice(-6));
+    const inp = document.getElementById('d-user-input');
+    if (inp) {
+        inp.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dSendMessage(); }
+        });
+    }
+});
+
+// ─── WebSocket ───────────────────────────────────────────
+function dConnectWs(onOpen) {
+    if (dWs && dWs.readyState === WebSocket.OPEN) { if (onOpen) onOpen(); return; }
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const apiKey = window.__NEXUS_API_KEY || '';
+    const keyParam = apiKey ? `?api_key=${apiKey}` : '';
+    dWs = new WebSocket(`${protocol}//${location.host}/ws${keyParam}`);
+
+    dWs.onopen = () => {
+        dWsReady = true;
+        setText('d-ws-status', 'online');
+        if (onOpen) onOpen();
+    };
+    dWs.onmessage = e => {
+        try { dHandleEvent(JSON.parse(e.data)); } catch {}
+    };
+    dWs.onclose = () => {
+        dWsReady = false;
+        setText('d-ws-status', 'reconnecting');
+        setTimeout(() => dConnectWs(), 3000);
+    };
+    dWs.onerror = () => setText('d-ws-status', 'error');
+    setText('d-ws-status', 'connecting');
+}
+
+// ─── Event handler ───────────────────────────────────────
+function dHandleEvent(data) {
+    const type    = data.type;
+    const content = data.content || '';
+
+    switch (type) {
+        case 'received':      dThink('◈', content, 'received');   break;
+        case 'memory_scan':   dThink('✦', content, 'memory');     break;
+        case 'memory_found':  dThink('◇', content, 'memory');     break;
+        case 'cache_hit':     dThink('⚡', content, 'selected');  break;
+        case 'routing':       dThink('→', content, 'routing');    break;
+        case 'routed':
+            dThink('✓', content, 'routing');
+            dActivateAgent(content);
+            break;
+        case 'hypothesis':    dThink('✧', content, 'hypothesis'); break;
+        case 'selected':      dThink('✔', content, 'selected');   break;
+        case 'generating':    dThink('✎', content, 'generating'); break;
+        case 'final_answer':
+            dAddAssistantMsg(content);
+            dSetProcessing(false);
+            dClearAgent();
+            break;
+        case 'budget_status':
+            try { updateMainPanel({ budget: JSON.parse(content) }); } catch {}
+            break;
+        case 'budget_exhausted':
+            dThink('⛔', content, 'error');
+            break;
+        case 'error':
+            dThink('✖', content, 'error');
+            dAddAssistantMsg('Error: ' + content);
+            dSetProcessing(false);
+            dClearAgent();
+            break;
+        default:
+            dThink('•', `[${type}] ${content}`, '');
+    }
+}
+
+// ─── Agent display ───────────────────────────────────────
+function dActivateAgent(content) {
+    const match = content.match(/Agents:\s*\[([^\]]*)\]/i);
+    if (!match) return;
+    const name = match[1].replace(/['"]/g, '').split(',')[0].trim();
+    if (!name) return;
+    setText('d-last-skill', name);
+    const el = document.getElementById('d-active-agent');
+    if (el) el.innerHTML = `
+        <div class="agent-active">
+            <div class="agent-active-name">${escHtml(name)}</div>
+            <div class="agent-active-status">Processing...</div>
+        </div>`;
+}
+
+function dClearAgent() {
+    const el = document.getElementById('d-active-agent');
+    if (el) el.innerHTML = `
+        <div class="agent-idle">
+            <div class="idle-diamond">
+                <svg viewBox="0 0 40 40">
+                    <polygon points="20,2 38,20 20,38 2,20" fill="none" stroke="currentColor" stroke-width="1"/>
+                </svg>
+            </div>
+            <span>Awaiting Input</span>
+        </div>`;
+}
+
+// ─── Thinking log ─────────────────────────────────────────
+function dThink(icon, text, cls) {
+    const log = document.getElementById('d-thinking-log');
+    if (!log) return;
+    const entry = document.createElement('div');
+    entry.className = 'think-entry ' + (cls || '');
+    const t = new Date().toLocaleTimeString('en-US', { hour12: false });
+    entry.innerHTML = `<span class="time">${t}</span> <span class="icon">${icon}</span> ${escHtml(text)}`;
+    log.appendChild(entry);
+    log.scrollTop = log.scrollHeight;
+    while (log.children.length > 80) log.removeChild(log.firstChild);
+}
+
+// ─── Messages ─────────────────────────────────────────────
+function dAddUserMsg(text) {
+    const msgs = document.getElementById('d-messages');
+    if (!msgs) return;
+    const div = document.createElement('div');
+    div.className = 'message user';
+    div.innerHTML = `<div class="bubble">${escHtml(text)}</div>`;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+    dMsgCount++;
+    setText('d-msg-count', dMsgCount);
+}
+
+function dAddAssistantMsg(text) {
+    const msgs = document.getElementById('d-messages');
+    if (!msgs) return;
+    const streaming = msgs.querySelector('.streaming-msg');
+    if (streaming) streaming.remove();
+    const div = document.createElement('div');
+    div.className = 'message assistant';
+    div.innerHTML = `<div class="bubble"><div class="agent-label">Nexus AI</div>${dFormatMsg(text)}</div>`;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+}
+
+function dAddStreamingIndicator() {
+    const msgs = document.getElementById('d-messages');
+    if (!msgs) return;
+    const div = document.createElement('div');
+    div.className = 'message assistant streaming-msg';
+    div.innerHTML = `<div class="bubble"><div class="agent-label">Nexus AI</div><div class="streaming-indicator"><span></span><span></span><span></span></div></div>`;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+}
+
+// ─── Markdown formatter (enhanced) ───────────────────────
+function dFormatMsg(text) {
+    let h = escHtml(text);
+
+    // 1. Save fenced code blocks as placeholders so \n→<br> doesn't corrupt them
+    const blocks = [];
+    h = h.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+        blocks.push(`<pre><code class="lang-${lang || 'text'}">${code.trimEnd()}</code></pre>`);
+        return '\x00BLK' + (blocks.length - 1) + '\x00';
+    });
+
+    // 2. Inline code
+    h = h.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+
+    // 3. Headers
+    h = h.replace(/^### (.+)$/gm, '<h4 class="md-h4">$1</h4>');
+    h = h.replace(/^## (.+)$/gm,  '<h3 class="md-h3">$1</h3>');
+    h = h.replace(/^# (.+)$/gm,   '<h2 class="md-h2">$1</h2>');
+
+    // 4. Bold & italic
+    h = h.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    h = h.replace(/\*([^*\n]+)\*/g,     '<em>$1</em>');
+
+    // 5. Lists
+    h = h.replace(/^[-•] (.+)$/gm,  '<li>$1</li>');
+    h = h.replace(/^\d+\. (.+)$/gm, '<li class="ol">$1</li>');
+    h = h.replace(/(<li[\s\S]*?<\/li>(\n<li[\s\S]*?<\/li>)*)/g,
+                  m => '<ul>' + m + '</ul>');
+    h = h.replace(/<\/ul>\n<ul>/g, '');
+
+    // 6. Horizontal rule
+    h = h.replace(/^---+$/gm, '<hr class="md-hr">');
+
+    // 7. Line breaks
+    h = h.replace(/\n/g, '<br>');
+
+    // 8. Restore code blocks
+    h = h.replace(/\x00BLK(\d+)\x00/g, (_, i) => blocks[+i]);
+
+    return h;
+}
+
+// ─── Send message ─────────────────────────────────────────
+function dSendMessage() {
+    const input = document.getElementById('d-user-input');
+    const text  = input?.value.trim();
+    if (!text || dIsProcessing) return;
+
+    dAddUserMsg(text);
+    dSetProcessing(true);
+    input.value = '';
+
+    if (dWs && dWs.readyState === WebSocket.OPEN) {
+        dWs.send(JSON.stringify({ content: text, session_id: dSessionId }));
+    } else {
+        dAddAssistantMsg('Neural link disconnected. Reconnecting...');
+        dSetProcessing(false);
+        dConnectWs();
+    }
+}
+
+// ─── Processing state ─────────────────────────────────────
+function dSetProcessing(state) {
+    dIsProcessing = state;
+    const btn = document.getElementById('d-send-btn');
+    if (btn) btn.disabled = state;
+    if (state) {
+        dAddStreamingIndicator();
+    } else {
+        const inp = document.getElementById('d-user-input');
+        if (inp) inp.focus();
+    }
+}
