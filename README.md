@@ -1,10 +1,10 @@
 # Nexus AI — Personal Multi-Agent Intelligence System
 
-> A production-ready multi-agent AI assistant powered by **GitHub Models (GPT-4o mini)**, built for real-world daily use across Web, Telegram, and REST API interfaces.
+> A production-ready multi-agent AI assistant powered by **Gemini 2.0 Flash**, built for real-world daily use across Web, Telegram, and REST API interfaces.
 
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)
-![GitHub Models](https://img.shields.io/badge/GitHub%20Models-GPT--4o%20mini-black.svg)
+![Gemini](https://img.shields.io/badge/Google-Gemini%202.0%20Flash-blue.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 ---
@@ -56,9 +56,10 @@ Built and used daily as a personal productivity tool. Not a demo — a real work
 └──────────────────┬──────────────────────────────────┘
                    │
 ┌──────────────────▼──────────────────────────────────┐
-│            LLM PROVIDER (LiteLLM)                    │
-│  Primary:  GitHub Models / GPT-4o mini               │
-│  Fallback: Groq Llama 3.3 70B → Gemini Flash         │
+│            LLM PROVIDER (LiteLLM + Google GenAI SDK)  │
+│  Primary:  Gemini 2.0 Flash (Google AI)               │
+│  Fallback: Groq Llama 3.3 70B                         │
+│  Cloud:    Vertex AI (see deploy/vertex_ai.py)        │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -69,8 +70,8 @@ Built and used daily as a personal productivity tool. Not a demo — a real work
 ### Multi-Agent Orchestration
 9 specialist agents, each with a defined domain. The orchestrator scores every request against all agents and routes to the best match — no manual selection needed.
 
-### GitHub Models Integration
-Uses **GPT-4o mini via GitHub Models** as the primary LLM — part of the Microsoft AI ecosystem, free with a GitHub account, zero credit card required. Automatic fallback chain: GitHub Models → Groq → Gemini.
+### Gemini 2.0 Flash Integration
+Uses **Gemini 2.0 Flash** as the primary LLM via both the Google GenAI SDK and LiteLLM. Supports Vertex AI deployment (see `deploy/vertex_ai.py`). Automatic fallback chain: Gemini → Groq Llama 3.3 70B.
 
 ### Multimodal — Image & File Support
 - **Photos**: Send any image via Telegram → Vision agent analyzes with GPT-4o (OCR, description, Q&A)
@@ -100,7 +101,7 @@ Built-in cron scheduler lets the AI set its own reminders and tasks. Daily morni
 
 | Layer | Technology |
 |---|---|
-| LLM | GitHub Models (GPT-4o mini), Groq, Gemini via LiteLLM |
+| LLM | Gemini 2.0 Flash (Google GenAI SDK + LiteLLM), Groq fallback |
 | Backend | Python 3.11, FastAPI, asyncio |
 | Memory | SQLite FTS5, ChromaDB, NetworkX |
 | Frontend | Vanilla JS, WebSocket, D3.js |
@@ -116,19 +117,33 @@ Built-in cron scheduler lets the AI set its own reminders and tasks. Daily morni
 git clone https://github.com/xushuowen/nexus-ai.git
 cd nexus-ai
 
-# 2. Install
+# 2. Install dependencies
 pip install -r requirements.txt
 
-# 3. Configure
+# 3. Configure environment
 cp .env.example .env
-# Add your GITHUB_TOKEN (free at github.com/settings/tokens)
+# Edit .env and add your API keys (see Environment Variables below)
 
 # 4. Run
-python -m nexus.main
+python run.py
 
 # Web UI:    http://localhost:8000
 # Dashboard: http://localhost:8000/dashboard
 ```
+
+## Reproducible Test Instructions (for Judges)
+
+After starting the server at `http://localhost:8000`, open the Web UI and try:
+
+| Test | Input | Expected Output |
+|------|-------|-----------------|
+| Weather | `台北天氣` | Current temp + 3-day forecast |
+| Translation | `幫我翻譯：人工智慧改變了世界` | English translation via Gemini |
+| GitHub | `github trending` | Top repos from past 7 days |
+| Academic | `search papers on transformer architecture` | arXiv papers |
+| Image Prompt | `畫一隻在月光下的貓` | Stable Diffusion prompt |
+
+All skills run without additional setup — just a valid `GEMINI_API_KEY`.
 
 ---
 
@@ -136,10 +151,10 @@ python -m nexus.main
 
 | Variable | Required | Description |
 |---|---|---|
-| `GITHUB_TOKEN` | Yes | GitHub PAT for GitHub Models (GPT-4o mini) |
+| `GEMINI_API_KEY` | Yes | Google AI Studio key — get free at aistudio.google.com |
 | `TELEGRAM_BOT_TOKEN` | Optional | Telegram bot from @BotFather |
 | `GROQ_API_KEY` | Optional | Groq fallback LLM (free tier) |
-| `GEMINI_API_KEY` | Optional | Gemini fallback LLM (free tier) |
+| `GITHUB_TOKEN` | Optional | GitHub API for repo search skill |
 
 ---
 
@@ -181,10 +196,14 @@ nexus/
 
 ## Hackathon
 
-**Microsoft AI Dev Days Hackathon 2026**
+**Gemini Live Agent Challenge 2026**
 Category: **Multi-Agent Systems**
 
-Nexus demonstrates sophisticated agent orchestration using the Microsoft AI ecosystem (GitHub Models), with real-world deployment and daily active use as a personal productivity system.
+Nexus AI demonstrates sophisticated agent orchestration powered by Gemini 2.0 Flash, with real-world deployment and daily active use as a personal productivity system. Google Cloud integration via Vertex AI is available in `deploy/vertex_ai.py`.
+
+See also:
+- [`deploy/vertex_ai.py`](deploy/vertex_ai.py) — Vertex AI (Google Cloud) integration
+- [`deploy/google_genai_sdk_example.py`](deploy/google_genai_sdk_example.py) — Google GenAI SDK usage
 
 ---
 
