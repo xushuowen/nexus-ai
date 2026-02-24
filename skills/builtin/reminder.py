@@ -68,6 +68,8 @@ class ReminderSkill(BaseSkill):
             return self._add(query)
 
     def _add(self, content: str) -> SkillResult:
+        if self._conn is None:
+            return SkillResult(content="提醒系統尚未初始化，請稍後再試。", success=False, source=self.name)
         for t in self.triggers:
             content = content.replace(t, "").strip()
         content = content.strip("我 ：:")
@@ -97,6 +99,8 @@ class ReminderSkill(BaseSkill):
         )
 
     def _list(self) -> SkillResult:
+        if self._conn is None:
+            return SkillResult(content="提醒系統尚未初始化，請稍後再試。", success=False, source=self.name)
         rows = self._conn.execute(
             "SELECT id, content, remind_at, done FROM reminders WHERE done = 0 ORDER BY created_at DESC LIMIT 20"
         ).fetchall()
@@ -115,6 +119,8 @@ class ReminderSkill(BaseSkill):
         return SkillResult(content="\n".join(lines), success=True, source=self.name)
 
     def _delete(self, query: str) -> SkillResult:
+        if self._conn is None:
+            return SkillResult(content="提醒系統尚未初始化，請稍後再試。", success=False, source=self.name)
         # Extract ID number
         numbers = re.findall(r'\d+', query)
         if not numbers:
@@ -134,21 +140,29 @@ class ReminderSkill(BaseSkill):
         now = datetime.now()
         remind_at = None
 
-        # Match "X分鐘後" / "X小時後" / "X天後"
-        m = re.search(r'(\d+)\s*分鐘後', text)
-        if m:
-            remind_at = (now + timedelta(minutes=int(m.group(1)))).timestamp()
-            text = text[:m.start()] + text[m.end():]
+        # Match combined "X小時Y分鐘後" (e.g. "1小時30分鐘後")
+        m_hr = re.search(r'(\d+)\s*小時後?', text)
+        m_min = re.search(r'(\d+)\s*分鐘後', text)
+        m_day = re.search(r'(\d+)\s*天後', text)
 
-        m = re.search(r'(\d+)\s*小時後', text)
-        if m:
-            remind_at = (now + timedelta(hours=int(m.group(1)))).timestamp()
-            text = text[:m.start()] + text[m.end():]
+        if m_hr and m_min:
+            # Combined: e.g. "1小時30分鐘後"
+            hours = int(m_hr.group(1))
+            minutes = int(m_min.group(1))
+            remind_at = (now + timedelta(hours=hours, minutes=minutes)).timestamp()
+            # Remove both patterns from text
+            text = re.sub(r'\d+\s*小時後?', '', text)
+            text = re.sub(r'\d+\s*分鐘後', '', text)
+        elif m_min:
+            remind_at = (now + timedelta(minutes=int(m_min.group(1)))).timestamp()
+            text = text[:m_min.start()] + text[m_min.end():]
+        elif m_hr:
+            remind_at = (now + timedelta(hours=int(m_hr.group(1)))).timestamp()
+            text = text[:m_hr.start()] + text[m_hr.end():]
 
-        m = re.search(r'(\d+)\s*天後', text)
-        if m:
-            remind_at = (now + timedelta(days=int(m.group(1)))).timestamp()
-            text = text[:m.start()] + text[m.end():]
+        if m_day and not remind_at:
+            remind_at = (now + timedelta(days=int(m_day.group(1)))).timestamp()
+            text = text[:m_day.start()] + text[m_day.end():]
 
         # Match "明天" / "後天"
         if "明天" in text:

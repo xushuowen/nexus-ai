@@ -131,12 +131,12 @@ class AcademicSearchSkill(BaseSkill):
         # Decide which database to search
         if "semantic scholar" in text_lower or "s2" in text_lower:
             query = query.replace("semantic scholar", "").replace("s2", "").strip()
-            result = await self._search_semantic_scholar(query)
+            result = await self._search_semantic_scholar(query, session_id)
         elif "openalex" in text_lower:
             query = query.replace("openalex", "").strip()
-            result = await self._search_openalex(query)
+            result = await self._search_openalex(query, session_id)
         else:
-            result = await self._search_pubmed(query)
+            result = await self._search_pubmed(query, session_id)
 
         # Append save hint and return
         if result.success:
@@ -198,7 +198,7 @@ class AcademicSearchSkill(BaseSkill):
         except Exception as e:
             return SkillResult(content=f"儲存失敗：{e}", success=False, source=self.name)
 
-    async def _search_pubmed(self, query: str) -> SkillResult:
+    async def _search_pubmed(self, query: str, session_id: str = "default") -> SkillResult:
         """Search PubMed via E-utilities API (free, 3 req/sec)."""
         import httpx
 
@@ -242,7 +242,6 @@ class AcademicSearchSkill(BaseSkill):
                 articles = self._parse_pubmed_xml(fetch_resp.text)
 
                 # Cache for save-to-notes action
-                session_id = "default"
                 cache_items = []
                 lines = [f"📚 **PubMed 搜尋結果**（共 {total} 筆，顯示 {len(articles)} 筆）\n"]
                 for i, article in enumerate(articles, 1):
@@ -273,7 +272,7 @@ class AcademicSearchSkill(BaseSkill):
         except Exception as e:
             return SkillResult(content=f"PubMed 搜尋失敗: {e}", success=False, source=self.name)
 
-    async def _search_semantic_scholar(self, query: str) -> SkillResult:
+    async def _search_semantic_scholar(self, query: str, session_id: str = "default") -> SkillResult:
         """Search Semantic Scholar API (free, no key needed)."""
         import httpx
 
@@ -300,6 +299,7 @@ class AcademicSearchSkill(BaseSkill):
                 )
 
             lines = [f"📚 **Semantic Scholar 搜尋結果**（共 {total:,} 筆）\n"]
+            cache_items = []
             for i, paper in enumerate(papers, 1):
                 title = paper.get("title", "Untitled")
                 year = paper.get("year", "")
@@ -317,13 +317,18 @@ class AcademicSearchSkill(BaseSkill):
                 if pdf_url:
                     lines.append(f"   📄 PDF: {pdf_url}")
                 lines.append("")
+                cache_items.append({
+                    "title": title, "authors": authors,
+                    "year": str(year), "url": paper.get("url", ""),
+                })
 
+            AcademicSearchSkill._last_results[session_id] = cache_items
             return SkillResult(content="\n".join(lines), success=True, source=self.name)
 
         except Exception as e:
             return SkillResult(content=f"Semantic Scholar 搜尋失敗: {e}", success=False, source=self.name)
 
-    async def _search_openalex(self, query: str) -> SkillResult:
+    async def _search_openalex(self, query: str, session_id: str = "default") -> SkillResult:
         """Search OpenAlex API (free, massive coverage)."""
         import httpx
 
@@ -346,6 +351,7 @@ class AcademicSearchSkill(BaseSkill):
                 )
 
             lines = [f"📚 **OpenAlex 搜尋結果**（共 {total:,} 筆）\n"]
+            cache_items = []
             for i, work in enumerate(works, 1):
                 title = work.get("title", "Untitled")
                 year = work.get("publication_year", "")
@@ -362,7 +368,11 @@ class AcademicSearchSkill(BaseSkill):
                 if oa_url:
                     lines.append(f"   📄 PDF: {oa_url}")
                 lines.append("")
+                cache_items.append({
+                    "title": title, "year": str(year), "url": doi or oa_url,
+                })
 
+            AcademicSearchSkill._last_results[session_id] = cache_items
             return SkillResult(content="\n".join(lines), success=True, source=self.name)
 
         except Exception as e:

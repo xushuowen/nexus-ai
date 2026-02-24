@@ -47,6 +47,20 @@ class ShellAgent(BaseAgent):
                      "pip", "npm", "git", "ls", "dir", "cd"]
         return min(1.0, sum(0.15 for kw in keywords if kw in text))
 
+    # Dangerous argument patterns to block even for allowed executables
+    _DANGEROUS_ARG_PATTERNS = [
+        re.compile(r'^\s*-c\s*$'),         # python -c / node -c (inline code execution)
+        re.compile(r'^\s*-e\s*$'),          # node -e (eval)
+        re.compile(r'__import__'),
+        re.compile(r'exec\s*\('),
+        re.compile(r'eval\s*\('),
+        re.compile(r'os\.system'),
+        re.compile(r'subprocess'),
+        re.compile(r'shutil\.rmtree'),
+        re.compile(r'rm\s+-rf'),
+        re.compile(r':(){ :|:& }'),         # fork bomb
+    ]
+
     def _is_allowed(self, command: str) -> tuple[bool, str]:
         """Check command against allowlist. Returns (allowed, reason)."""
         try:
@@ -63,6 +77,12 @@ class ShellAgent(BaseAgent):
 
         if executable not in self._allowlist:
             return False, f"Command '{executable}' not in allowlist. Allowed: {', '.join(self._allowlist[:10])}..."
+
+        # Block dangerous argument patterns (e.g. python -c "malicious code")
+        for i, arg in enumerate(parts[1:], 1):
+            for pattern in self._DANGEROUS_ARG_PATTERNS:
+                if pattern.search(arg):
+                    return False, f"Dangerous argument pattern blocked: '{arg}'"
 
         return True, ""
 

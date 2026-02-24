@@ -65,6 +65,8 @@ class PomodoroSkill(BaseSkill):
             return self._start(query)
 
     def _start(self, query: str) -> SkillResult:
+        if self._conn is None:
+            return SkillResult(content="番茄鐘系統尚未初始化，請稍後再試。", success=False, source=self.name)
         # Check if there's already an active session
         active = self._conn.execute(
             "SELECT id, task, started_at FROM pomodoro WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1"
@@ -103,6 +105,8 @@ class PomodoroSkill(BaseSkill):
         )
 
     def _stop(self) -> SkillResult:
+        if self._conn is None:
+            return SkillResult(content="番茄鐘系統尚未初始化，請稍後再試。", success=False, source=self.name)
         active = self._conn.execute(
             "SELECT id, task, started_at FROM pomodoro WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1"
         ).fetchone()
@@ -132,6 +136,8 @@ class PomodoroSkill(BaseSkill):
         )
 
     def _stats(self) -> SkillResult:
+        if self._conn is None:
+            return SkillResult(content="番茄鐘系統尚未初始化，請稍後再試。", success=False, source=self.name)
         today = time.strftime("%Y-%m-%d")
 
         today_rows = self._conn.execute(

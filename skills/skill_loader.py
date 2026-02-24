@@ -41,18 +41,38 @@ class SkillLoader:
         return "\n".join(lines)
 
     def match(self, text: str) -> BaseSkill | None:
-        """Find the best matching skill for input text (Level 1 matching)."""
-        best_skill = None
-        best_score = 0
+        """Find the best matching skill for input text (Level 1 matching).
+
+        Returns the highest-scoring skill, or None if no skill scores >= 1.
+        When scores tie, prefer the skill with more triggers matched.
+        """
+        scores: list[tuple[int, int, BaseSkill]] = []
+        text_lower = text.lower()
         for skill in self._skills.values():
             score = skill.match_score(text)
-            if score > best_score:
-                best_score = score
-                best_skill = skill
-        # Require at least 1 trigger match
-        if best_score >= 1:
-            return best_skill
-        return None
+            if score >= 1:
+                # Secondary: count raw trigger hits for tie-breaking
+                trigger_hits = sum(
+                    1 for t in skill.triggers
+                    if skill._trigger_matches(t.lower(), text_lower)
+                )
+                scores.append((score, trigger_hits, skill))
+
+        if not scores:
+            return None
+        # Sort by (score desc, trigger_hits desc)
+        scores.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        return scores[0][2]
+
+    def top_matches(self, text: str, n: int = 3) -> list[tuple[BaseSkill, int]]:
+        """Return top-N matching skills with their scores (for debugging/fallback)."""
+        results = []
+        for skill in self._skills.values():
+            score = skill.match_score(text)
+            if score >= 1:
+                results.append((skill, score))
+        results.sort(key=lambda x: x[1], reverse=True)
+        return results[:n]
 
     async def execute(self, skill: BaseSkill, query: str, context: dict[str, Any]) -> SkillResult:
         """Execute a skill (Level 3) with a hard 30-second timeout."""

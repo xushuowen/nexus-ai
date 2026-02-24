@@ -2,10 +2,29 @@
 
 from __future__ import annotations
 
+import os
 import re
 from typing import Any
 
 from nexus.skills.skill_base import BaseSkill, SkillResult
+
+def _gh_headers() -> dict[str, str]:
+    """Build GitHub API headers, including token if available."""
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    token = os.getenv("GITHUB_TOKEN", "")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+def _gh_rate_limit_msg(exc: Exception) -> str | None:
+    """Return friendly rate-limit message if the error is a 403/429, else None."""
+    msg = str(exc)
+    if "403" in msg or "rate limit" in msg.lower() or "429" in msg:
+        return (
+            "⚠️ GitHub API 速率限制已達上限。\n"
+            "已設定 GITHUB_TOKEN 可提高限制（5000次/小時），請稍後再試。"
+        )
+    return None
 
 
 class GitHubSkill(BaseSkill):
@@ -52,7 +71,7 @@ class GitHubSkill(BaseSkill):
             url = "https://api.github.com/search/repositories"
             params = {"q": query, "sort": "stars", "per_page": 5}
             async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(url, params=params, headers={"Accept": "application/vnd.github.v3+json"})
+                resp = await client.get(url, params=params, headers=_gh_headers())
                 resp.raise_for_status()
                 data = resp.json()
 
@@ -74,6 +93,9 @@ class GitHubSkill(BaseSkill):
             return SkillResult(content="\n".join(lines), success=True, source=self.name)
 
         except Exception as e:
+            rate_msg = _gh_rate_limit_msg(e)
+            if rate_msg:
+                return SkillResult(content=rate_msg, success=False, source=self.name)
             return SkillResult(content=f"GitHub 搜尋失敗: {e}", success=False, source=self.name)
 
     async def _repo_info(self, query: str) -> SkillResult:
@@ -88,7 +110,7 @@ class GitHubSkill(BaseSkill):
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.get(
                     f"https://api.github.com/repos/{repo_name}",
-                    headers={"Accept": "application/vnd.github.v3+json"},
+                    headers=_gh_headers(),
                 )
                 resp.raise_for_status()
                 repo = resp.json()
@@ -108,6 +130,9 @@ class GitHubSkill(BaseSkill):
             return SkillResult(content="\n".join(lines), success=True, source=self.name)
 
         except Exception as e:
+            rate_msg = _gh_rate_limit_msg(e)
+            if rate_msg:
+                return SkillResult(content=rate_msg, success=False, source=self.name)
             return SkillResult(content=f"取得 repo 資訊失敗: {e}", success=False, source=self.name)
 
     async def _trending(self, query: str) -> SkillResult:
@@ -120,7 +145,7 @@ class GitHubSkill(BaseSkill):
             url = "https://api.github.com/search/repositories"
             params = {"q": f"created:>{since}", "sort": "stars", "per_page": 8}
             async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(url, params=params, headers={"Accept": "application/vnd.github.v3+json"})
+                resp = await client.get(url, params=params, headers=_gh_headers())
                 resp.raise_for_status()
                 data = resp.json()
 
@@ -142,4 +167,7 @@ class GitHubSkill(BaseSkill):
             return SkillResult(content="\n".join(lines), success=True, source=self.name)
 
         except Exception as e:
+            rate_msg = _gh_rate_limit_msg(e)
+            if rate_msg:
+                return SkillResult(content=rate_msg, success=False, source=self.name)
             return SkillResult(content=f"Trending 資料取得失敗：{e}", success=False, source=self.name)

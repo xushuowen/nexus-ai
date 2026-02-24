@@ -58,15 +58,20 @@ class BaseSkill(ABC):
         return trigger in text_lower
 
     def match_score(self, text: str) -> int:
-        """Level 1: Check how well input matches this skill's triggers or intent patterns."""
+        """Level 1: Check how well input matches this skill's triggers or intent patterns.
+
+        Scoring:
+        - Each matching trigger keyword = 1 point
+        - Each matching intent pattern = 1 point (all patterns counted, not just first)
+        - Higher score = higher routing priority when multiple skills are candidates
+        """
         text_lower = text.lower()
         score = sum(1 for t in self.triggers if self._trigger_matches(t.lower(), text_lower))
-        # Intent patterns catch natural language that doesn't use exact trigger words
-        if score == 0:
-            for pattern in self.intent_patterns:
-                if re.search(pattern, text, re.IGNORECASE):
-                    score += 1
-                    break  # One intent match is enough to activate
+        # Count ALL matching intent patterns for better skill ranking
+        # (removed early break so multiple matches accumulate score)
+        for pattern in self.intent_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                score += 1
         return score
 
     def get_index(self) -> dict[str, str]:

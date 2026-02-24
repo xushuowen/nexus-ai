@@ -72,6 +72,8 @@ class DiarySkill(BaseSkill):
             return self._write(query)
 
     def _write(self, content: str) -> SkillResult:
+        if self._conn is None:
+            return SkillResult(content="日記系統尚未初始化，請稍後再試。", success=False, source=self.name)
         # Strip trigger words from content
         for t in self.triggers:
             content = content.replace(t, "").strip()
@@ -95,6 +97,8 @@ class DiarySkill(BaseSkill):
         )
 
     def _search(self, query: str) -> SkillResult:
+        if self._conn is None:
+            return SkillResult(content="日記系統尚未初始化，請稍後再試。", success=False, source=self.name)
         # Extract search keywords
         for prefix in ["搜尋", "search", "找", "日記"]:
             query = query.replace(prefix, "").strip()
@@ -118,6 +122,8 @@ class DiarySkill(BaseSkill):
         return SkillResult(content="\n".join(lines), success=True, source=self.name)
 
     def _recent(self) -> SkillResult:
+        if self._conn is None:
+            return SkillResult(content="日記系統尚未初始化，請稍後再試。", success=False, source=self.name)
         rows = self._conn.execute(
             "SELECT content, date FROM diary ORDER BY timestamp DESC LIMIT 10"
         ).fetchall()
