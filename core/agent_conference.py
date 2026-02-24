@@ -220,13 +220,39 @@ class AgentConference:
         )
 
     def _check_consensus(self, contributions: list[dict]) -> bool:
-        """Simple consensus detection: check if agents agree."""
-        agree_keywords = ["同意", "agree", "正確", "沒錯", "一致", "consensus"]
+        """Consensus detection with disagree-override heuristic.
+
+        Rules:
+        - Any agent with a strong disagree signal blocks consensus entirely.
+        - An agent "agrees" only when its text has explicit agreement words but
+          no negation immediately before them ("disagree", "not agree", etc.).
+        - Consensus requires ≥ 60 % of agents agreeing AND no strong disagrees.
+        - Low-confidence responses (< 0.3) count as neither agree nor disagree.
+        """
+        if not contributions:
+            return False
+
+        _AGREE = ["同意", "正確", "沒錯", "一致", "agree", "consensus", "correct", "agree with"]
+        _DISAGREE = ["不同意", "反對", "disagree", "incorrect", "wrong", "differ", "however, i think"]
+
         agree_count = 0
         for c in contributions:
             text = c.get("content", "").lower()
-            if any(k in text for k in agree_keywords):
+            conf = c.get("confidence", 1.0)
+
+            # Skip low-confidence timeout/error responses
+            if conf < 0.3:
+                continue
+
+            # Strong disagree → block consensus immediately
+            if any(k in text for k in _DISAGREE):
+                return False
+
+            # Agree only when an agreement keyword appears without negation prefix
+            if any(k in text for k in _AGREE):
+                # Negation guard: "not agree", "不同意" already caught above
                 agree_count += 1
+
         return agree_count >= len(contributions) * 0.6
 
     def _build_summary(

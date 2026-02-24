@@ -125,6 +125,15 @@ async def _deferred_init(llm, mem, orch, tg, bdg):
 
         orch.set_memory(mem)
 
+        # Inject memory into memory_manager skill if loaded
+        if skill_loader:
+            mm_skill = next(
+                (s for s in skill_loader.list_skills() if s.name == "memory_manager"), None
+            )
+            if mm_skill and hasattr(mm_skill, "set_memory"):
+                mm_skill.set_memory(mem)
+                logger.info("Injected memory into memory_manager skill")
+
         # Start Telegram bot
         tg.set_orchestrator(orch)
         tg.set_memory(mem)

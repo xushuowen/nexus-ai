@@ -45,10 +45,22 @@ class BaseSkill(ABC):
     instructions: str = ""            # Detailed instructions for the skill
     output_format: str = ""           # Expected output format
 
+    @staticmethod
+    def _trigger_matches(trigger: str, text_lower: str) -> bool:
+        """Match trigger against lowercased text.
+
+        ASCII triggers use word-boundary matching to avoid false positives
+        (e.g. 'note' inside 'annotate').  CJK/mixed triggers fall back to
+        simple substring search because \b doesn't work for CJK characters.
+        """
+        if re.match(r'^[a-z0-9 _-]+$', trigger):
+            return bool(re.search(r'\b' + re.escape(trigger) + r'\b', text_lower))
+        return trigger in text_lower
+
     def match_score(self, text: str) -> int:
         """Level 1: Check how well input matches this skill's triggers or intent patterns."""
         text_lower = text.lower()
-        score = sum(1 for t in self.triggers if t.lower() in text_lower)
+        score = sum(1 for t in self.triggers if self._trigger_matches(t.lower(), text_lower))
         # Intent patterns catch natural language that doesn't use exact trigger words
         if score == 0:
             for pattern in self.intent_patterns:

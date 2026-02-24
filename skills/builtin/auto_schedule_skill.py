@@ -224,16 +224,42 @@ class AutoScheduleSkill(BaseSkill):
 
         # ── Time ──
         time_str = ""
-        m = re.search(r'(上午|下午|早上|晚上)?\s*(\d{1,2})\s*[點:時](\d{0,2})', text)
+
+        # CJK: 早上/下午 + N點[半 | N分 | NN]
+        m = re.search(r'(上午|下午|早上|晚上)?\s*(\d{1,2})\s*[點時](半|\d{1,2}[分]?)?', text)
         if m:
             period = m.group(1) or ""
             hour = int(m.group(2))
-            minute = int(m.group(3)) if m.group(3) else 0
+            raw_min = m.group(3) or ""
+            if raw_min == "半":
+                minute = 30
+            else:
+                minute = int(re.sub(r'[分]', '', raw_min)) if re.sub(r'[分]', '', raw_min) else 0
             if period in ("下午", "晚上") and hour < 12:
                 hour += 12
             elif period in ("上午", "早上") and hour == 12:
                 hour = 0
             time_str = f"{hour:02d}:{minute:02d}"
+
+        # Colon format with AM/PM: "12:30 PM", "8:00 am", "3 PM"
+        if not time_str:
+            m = re.search(r'(\d{1,2})(?::(\d{2}))?\s*(am|pm)', text, re.IGNORECASE)
+            if m:
+                hour = int(m.group(1))
+                minute = int(m.group(2)) if m.group(2) else 0
+                if m.group(3).lower() == "pm" and hour < 12:
+                    hour += 12
+                elif m.group(3).lower() == "am" and hour == 12:
+                    hour = 0
+                time_str = f"{hour:02d}:{minute:02d}"
+
+        # Plain 24-hour colon: "14:30"
+        if not time_str:
+            m = re.search(r'\b(\d{1,2}):(\d{2})\b', text)
+            if m:
+                h, mn = int(m.group(1)), int(m.group(2))
+                if 0 <= h <= 23 and 0 <= mn <= 59:
+                    time_str = f"{h:02d}:{mn:02d}"
 
         # ── Action: remove all time/day keywords ──
         action = text
@@ -242,7 +268,9 @@ class AutoScheduleSkill(BaseSkill):
         action = re.sub(r'每[天日週]|每個工作日|每個週末|工作日|平日|週末|假日', '', action)
         action = re.sub(r'每週[一二三四五六日]+', '', action)
         action = re.sub(r'星期[一二三四五六日天]|週[一二三四五六日]', '', action)
-        action = re.sub(r'(上午|下午|早上|晚上)?\s*\d{1,2}\s*[點:時]\d{0,2}', '', action)
+        action = re.sub(r'(上午|下午|早上|晚上)?\s*\d{1,2}\s*[點時](半|\d{1,2}[分]?)?', '', action)
+        action = re.sub(r'\d{1,2}(?::\d{2})?\s*(?:am|pm)', '', action, flags=re.IGNORECASE)
+        action = re.sub(r'\b\d{1,2}:\d{2}\b', '', action)
         action = action.strip(" 的在：: ")
 
         return time_str, days, action

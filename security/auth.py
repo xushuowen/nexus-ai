@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from fastapi import Request, WebSocket, HTTPException, status
 
 
@@ -17,14 +18,14 @@ def verify_request(request: Request) -> bool:
     if not api_key:
         return True  # Auth disabled
 
-    # Check header first
+    # Check header first (timing-safe compare)
     header_key = request.headers.get("X-API-Key", "")
-    if header_key == api_key:
+    if header_key and secrets.compare_digest(header_key, api_key):
         return True
 
     # Check query param
     query_key = request.query_params.get("api_key", "")
-    if query_key == api_key:
+    if query_key and secrets.compare_digest(query_key, api_key):
         return True
 
     return False
@@ -37,7 +38,7 @@ def verify_websocket(ws: WebSocket) -> bool:
         return True
 
     query_key = ws.query_params.get("api_key", "")
-    return query_key == api_key
+    return bool(query_key and secrets.compare_digest(query_key, api_key))
 
 
 def require_auth(request: Request) -> None:

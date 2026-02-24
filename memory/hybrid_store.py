@@ -167,6 +167,22 @@ class HybridMemory:
         await self.fts.store(title=title, content=content, category=category)
         await self.vector.store(content, metadata={"title": title, "category": category})
 
+    async def forget(self, query: str, limit: int = 20) -> int:
+        """Delete FTS entries matching query. Returns number of items deleted."""
+        deleted = 0
+        try:
+            results = await self.fts.search(query, limit=limit)
+            for item in results:
+                rowid = item.get("id")
+                if rowid is not None:
+                    await self.fts.delete(rowid)
+                    deleted += 1
+            if deleted:
+                logger.info("Memory forget: removed %d FTS entries matching '%s'", deleted, query)
+        except Exception as e:
+            logger.warning("Memory forget error: %s", e)
+        return deleted
+
     async def close(self) -> None:
         """Close all memory connections."""
         await self.episodic.close()
