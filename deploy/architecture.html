@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Nexus AI — Architecture Diagram</title>
+<style>
+  body {
+    background: #0a0e1a;
+    color: #00d4ff;
+    font-family: 'Courier New', monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    margin: 0;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+  h1 {
+    color: #00d4ff;
+    font-size: 22px;
+    margin-bottom: 6px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .subtitle {
+    color: #4a9eff;
+    font-size: 13px;
+    margin-bottom: 30px;
+    letter-spacing: 1px;
+  }
+  .diagram {
+    background: #0d1225;
+    border: 1px solid #1a3a5c;
+    border-radius: 8px;
+    padding: 30px 40px;
+    max-width: 720px;
+    width: 100%;
+  }
+  .box {
+    border: 1px solid #1e4a7a;
+    border-radius: 4px;
+    padding: 10px 16px;
+    margin: 6px 0;
+    position: relative;
+  }
+  .box.interfaces  { border-color: #00d4ff; background: #071828; }
+  .box.budget      { border-color: #4a9eff; background: #071828; }
+  .box.orch        { border-color: #00d4ff; background: #071828; }
+  .box.agents      { border-color: #3a7fd4; background: #071828; }
+  .box.skills      { border-color: #3a7fd4; background: #071828; }
+  .box.memory      { border-color: #4a9eff; background: #071828; }
+  .box.llm         { border-color: #00ff88; background: #071828; }
+
+  .box-title {
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .interfaces .box-title { color: #00d4ff; }
+  .budget .box-title     { color: #4a9eff; }
+  .orch .box-title       { color: #00d4ff; }
+  .agents .box-title     { color: #7ab8ff; }
+  .skills .box-title     { color: #7ab8ff; }
+  .memory .box-title     { color: #4a9eff; }
+  .llm .box-title        { color: #00ff88; }
+
+  .box-content {
+    font-size: 12px;
+    color: #8ab4d4;
+    line-height: 1.6;
+  }
+  .llm .box-content { color: #80ffb8; }
+
+  .arrow {
+    text-align: center;
+    color: #1e4a7a;
+    font-size: 16px;
+    margin: 2px 0;
+    line-height: 1;
+  }
+  .row {
+    display: flex;
+    gap: 12px;
+    margin: 6px 0;
+  }
+  .row .box {
+    flex: 1;
+    margin: 0;
+  }
+  .badge {
+    display: inline-block;
+    background: #0a2040;
+    border: 1px solid #1e4a7a;
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-size: 11px;
+    color: #4a9eff;
+    margin: 2px 3px 2px 0;
+  }
+  .badge.green { border-color: #00ff88; color: #00ff88; }
+  .footer {
+    margin-top: 20px;
+    font-size: 11px;
+    color: #2a4a6a;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+
+<h1>⬡ Nexus AI</h1>
+<div class="subtitle">Personal Multi-Agent Intelligence System — Architecture</div>
+
+<div class="diagram">
+
+  <!-- Interfaces -->
+  <div class="box interfaces">
+    <div class="box-title">Interfaces</div>
+    <div class="box-content">
+      <span class="badge">Web UI (WebSocket)</span>
+      <span class="badge">Telegram Bot</span>
+      <span class="badge">REST API</span>
+    </div>
+  </div>
+
+  <div class="arrow">│</div>
+
+  <!-- Budget -->
+  <div class="box budget">
+    <div class="box-title">Token Budget Controller</div>
+    <div class="box-content">Daily 50k token limit &nbsp;·&nbsp; Auto-reset at midnight &nbsp;·&nbsp; Hard stop enforcement</div>
+  </div>
+
+  <div class="arrow">│</div>
+
+  <!-- Orchestrator -->
+  <div class="box orch">
+    <div class="box-title">Orchestrator</div>
+    <div class="box-content">Intent detection &nbsp;→&nbsp; Agent routing &nbsp;→&nbsp; Memory recall &nbsp;→&nbsp; Response synthesis</div>
+  </div>
+
+  <div class="arrow">├───────────────────────────────┤</div>
+
+  <!-- Agents + Skills -->
+  <div class="row">
+    <div class="box agents">
+      <div class="box-title">Specialist Agents (9)</div>
+      <div class="box-content">
+        Reasoning &nbsp;·&nbsp; Coder<br>
+        Research &nbsp;·&nbsp; Knowledge<br>
+        Vision &nbsp;·&nbsp; File<br>
+        Web &nbsp;·&nbsp; Shell<br>
+        Optimizer
+      </div>
+    </div>
+    <div class="box skills">
+      <div class="box-title">Skill Engine (19)</div>
+      <div class="box-content">
+        weather &nbsp;·&nbsp; translator<br>
+        github &nbsp;·&nbsp; web_search<br>
+        news &nbsp;·&nbsp; diary<br>
+        reminder &nbsp;·&nbsp; pdf<br>
+        image_gen &nbsp;·&nbsp; more…
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">│</div>
+
+  <!-- Memory -->
+  <div class="box memory">
+    <div class="box-title">4-Layer Memory System</div>
+    <div class="box-content">
+      <span class="badge">Working Memory (7 slots)</span>
+      <span class="badge">Episodic (SQLite)</span>
+      <span class="badge">Semantic (ChromaDB)</span>
+      <span class="badge">Procedural Cache</span>
+    </div>
+  </div>
+
+  <div class="arrow">│</div>
+
+  <!-- LLM -->
+  <div class="box llm">
+    <div class="box-title">LLM Provider — Google GenAI SDK + LiteLLM</div>
+    <div class="box-content">
+      <span class="badge green">Primary: Gemini 2.0 Flash (Google AI)</span>
+      <span class="badge green">Cloud: Vertex AI (Google Cloud)</span><br>
+      <span class="badge">Fallback: Groq Llama 3.3 70B</span>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">Built for Gemini Live Agent Challenge 2026 &nbsp;·&nbsp; github.com/xushuowen/nexus-ai</div>
+
+</body>
+</html>
