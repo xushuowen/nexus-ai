@@ -59,7 +59,11 @@ class BudgetController:
             "last_reset": self._last_reset.isoformat(),
         }
         self._state_path.parent.mkdir(parents=True, exist_ok=True)
-        self._state_path.write_text(json.dumps(data), encoding="utf-8")
+        # Atomic write: write to .tmp then rename so a crash mid-write
+        # never leaves a corrupt state file.
+        tmp = self._state_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data), encoding="utf-8")
+        tmp.replace(self._state_path)
 
     def _should_reset(self, since: datetime) -> bool:
         now = datetime.now()
@@ -104,6 +108,9 @@ class BudgetController:
                 "source": source,
                 "metadata": metadata or {},
             })
+            # Cap history to avoid unbounded memory growth
+            if len(self._history) > 500:
+                self._history = self._history[-500:]
             self._save_state()
 
     async def request_curiosity_op(self, estimated_tokens: int) -> bool:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Any, AsyncIterator
 
 import litellm
@@ -25,6 +26,22 @@ class LLMProvider:
     def __init__(self, budget: BudgetController, router: ModelRouter) -> None:
         self.budget = budget
         self.router = router
+
+    @staticmethod
+    def _count_tokens(text: str) -> int:
+        """Estimate token count with CJK-aware heuristic.
+
+        Rules (approximate):
+        - CJK characters (Chinese/Japanese/Korean): ~1 token each
+        - English words: ~1.3 tokens each
+        - Everything else (spaces, punctuation, numbers): ~0.3 tokens per char
+        Much better than the old `split() * 2` which over-counted CJK severely.
+        """
+        cjk = len(re.findall(r"[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7ff]", text))
+        en_words = len(re.findall(r"[a-zA-Z]+", text))
+        # remaining chars (spaces, digits, punctuation)
+        other_chars = max(0, len(text) - cjk - sum(len(w) for w in re.findall(r"[a-zA-Z]+", text)))
+        return max(1, int(cjk * 1.0 + en_words * 1.3 + other_chars * 0.3))
 
     @staticmethod
     def _extra_kwargs(spec: ModelSpec) -> dict:
@@ -50,7 +67,7 @@ class LLMProvider:
     ) -> str:
         """Send a completion request with budget checks."""
         spec = model_spec or self.router.route(task_type)
-        tokens_est = len(prompt.split()) * 2  # rough estimate
+        tokens_est = self._count_tokens(prompt)
         mt = min(max_tokens or spec.max_tokens, self.budget.per_request_max)
 
         if not await self.budget.request_tokens(tokens_est + mt, source=source):
@@ -69,12 +86,13 @@ class LLMProvider:
                 messages=messages,
                 max_tokens=mt,
                 temperature=temperature if temperature is not None else spec.temperature,
+                timeout=60,  # hard cap: never hang more than 60 s
                 **self._extra_kwargs(spec),
             )
             content = response.choices[0].message.content or ""
             # Track actual usage
             usage = response.usage
-            total_tokens = (usage.total_tokens if usage else tokens_est + len(content.split()))
+            total_tokens = (usage.total_tokens if usage else tokens_est + self._count_tokens(content))
             await self.budget.consume_tokens(total_tokens, source=source, metadata={
                 "model": spec.model_id,
                 "task_type": task_type,
@@ -107,7 +125,7 @@ class LLMProvider:
     ) -> AsyncIterator[str]:
         """Stream a completion response token by token."""
         spec = model_spec or self.router.route(task_type)
-        tokens_est = len(prompt.split()) * 2
+        tokens_est = self._count_tokens(prompt)
         mt = min(self.budget.per_request_max, spec.max_tokens)
 
         if not await self.budget.request_tokens(tokens_est + mt, source=source):
@@ -125,15 +143,19 @@ class LLMProvider:
                 max_tokens=mt,
                 temperature=spec.temperature,
                 stream=True,
+                timeout=90,  # streaming can be longer; 90 s hard cap
                 **self._extra_kwargs(spec),
             )
             total_tokens = tokens_est
+            output_chars = 0
             async for chunk in response:
                 delta = chunk.choices[0].delta
                 if delta and delta.content:
-                    total_tokens += 1
+                    output_chars += len(delta.content)
                     yield delta.content
 
+            # Better output token estimate than counting chunks 1-by-1
+            total_tokens += self._count_tokens(" " * output_chars)  # approx
             await self.budget.consume_tokens(total_tokens, source=source, metadata={
                 "model": spec.model_id,
                 "task_type": task_type,
@@ -156,7 +178,7 @@ class LLMProvider:
     ) -> str:
         """Send a chat completion with full message history."""
         spec = model_spec or self.router.route(task_type)
-        tokens_est = sum(len(m.get("content", "").split()) for m in messages) * 2
+        tokens_est = sum(self._count_tokens(m.get("content", "")) for m in messages)
         mt = min(max_tokens or spec.max_tokens, self.budget.per_request_max)
 
         if not await self.budget.request_tokens(tokens_est + mt, source=source):
@@ -170,11 +192,12 @@ class LLMProvider:
                 messages=messages,
                 max_tokens=mt,
                 temperature=temperature if temperature is not None else spec.temperature,
+                timeout=60,
                 **self._extra_kwargs(spec),
             )
             content = response.choices[0].message.content or ""
             usage = response.usage
-            total_tokens = (usage.total_tokens if usage else tokens_est + len(content.split()))
+            total_tokens = (usage.total_tokens if usage else tokens_est + self._count_tokens(content))
             await self.budget.consume_tokens(total_tokens, source=source, metadata={
                 "model": spec.model_id,
                 "task_type": task_type,
@@ -211,9 +234,9 @@ class LLMProvider:
         b64 = base64.b64encode(data).decode()
         mime = mimetypes.guess_type(image_path)[0] or "image/jpeg"
 
-        # Always use the primary (Gemini) model for vision
-        spec = self.router.get_primary()
-        tokens_est = len(prompt.split()) * 2 + 300  # rough estimate incl. image
+        # Route to a vision-capable model (config.yaml: github-gpt4o has use_for: ["vision"])
+        spec = self.router.route("vision")
+        tokens_est = self._count_tokens(prompt) + 300  # +300 for image encoding overhead
         mt = min(spec.max_tokens, self.budget.per_request_max)
 
         if not await self.budget.request_tokens(tokens_est + mt, source=source):
@@ -236,10 +259,11 @@ class LLMProvider:
                 messages=messages,
                 max_tokens=mt,
                 temperature=spec.temperature,
+                timeout=90,  # vision models can be slower
                 **self._extra_kwargs(spec),
             )
             content = response.choices[0].message.content or ""
-            total = response.usage.total_tokens if response.usage else tokens_est + len(content.split())
+            total = response.usage.total_tokens if response.usage else tokens_est + self._count_tokens(content)
             await self.budget.consume_tokens(total, source=source, metadata={
                 "model": spec.model_id, "task_type": "vision",
             })

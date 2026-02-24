@@ -27,20 +27,31 @@ class TelegramChannel:
         self._budget = None
         self._app = None
         self._running = False
-        # Whitelist: comma-separated chat IDs in env var
-        raw = os.getenv("TELEGRAM_ALLOWED_USERS", "").strip()
+        # Build whitelist: always include owner (TELEGRAM_CHAT_ID),
+        # plus any extra IDs from TELEGRAM_ALLOWED_USERS.
         self._allowed_users: set[int] = set()
-        if raw:
-            for uid in raw.split(","):
-                uid = uid.strip()
+        owner_id = os.getenv("TELEGRAM_CHAT_ID", "").strip().lstrip("-")
+        if owner_id.isdigit():
+            self._allowed_users.add(int(os.getenv("TELEGRAM_CHAT_ID", "").strip()))
+        extra = os.getenv("TELEGRAM_ALLOWED_USERS", "").strip()
+        if extra:
+            for uid in extra.split(","):
+                uid = uid.strip().lstrip("-")
                 if uid.isdigit():
                     self._allowed_users.add(int(uid))
+        if self._allowed_users:
             logger.info(f"Telegram whitelist: {self._allowed_users}")
+        else:
+            logger.warning(
+                "Telegram: no whitelist configured "
+                "(set TELEGRAM_CHAT_ID or TELEGRAM_ALLOWED_USERS). "
+                "Bot will reject all incoming messages."
+            )
 
     def _is_user_allowed(self, chat_id: int) -> bool:
-        """Check if user is allowed. If no whitelist set, allow all."""
+        """Check if chat_id is whitelisted. Defaults to deny-all for safety."""
         if not self._allowed_users:
-            return True
+            return False  # no whitelist → deny everyone
         return chat_id in self._allowed_users
 
     def set_orchestrator(self, orchestrator) -> None:

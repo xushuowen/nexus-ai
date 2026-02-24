@@ -51,7 +51,9 @@ skill_loader: SkillLoader | None = None
 active_websockets: list[WebSocket] = []
 rate_limiter: RateLimiter | None = None
 _schedule_runner: ScheduleRunner | None = None
-_init_complete = False
+# Use asyncio.Event instead of a plain bool so waiters can block on it
+# (created in lifespan so the event loop is already running).
+_init_event: asyncio.Event | None = None
 
 
 async def _morning_report_check(orch, tg) -> None:
@@ -93,16 +95,20 @@ async def _morning_report_check(orch, tg) -> None:
     if report_text:
         sent = await tg.send_to_owner(f"🌅 **今日晨報**\n\n{report_text}")
         if sent:
-            report_file.write_text(
+            # Atomic write: write to .tmp then rename so a crash mid-write
+            # never leaves a corrupt state file that blocks tomorrow's report.
+            tmp_path = report_file.with_suffix(".tmp")
+            tmp_path.write_text(
                 json.dumps({"last_date": today}, ensure_ascii=False),
                 encoding="utf-8",
             )
+            tmp_path.replace(report_file)
             logger.info("Morning report sent and recorded.")
 
 
 async def _deferred_init(llm, mem, orch, tg, bdg):
     """Initialize heavy components in background so the app starts fast."""
-    global _init_complete
+    global _init_event
     try:
         # This is the slow part (ChromaDB downloads ONNX model ~79MB on first run)
         logger.info("Background init: starting memory system...")
@@ -120,7 +126,8 @@ async def _deferred_init(llm, mem, orch, tg, bdg):
         except Exception as e:
             logger.warning(f"Telegram start failed: {e}")
 
-        _init_complete = True
+        if _init_event is not None:
+            _init_event.set()
         logger.info("Background init: all systems operational!")
 
         # 啟動循環排程執行器
@@ -144,7 +151,8 @@ async def _deferred_init(llm, mem, orch, tg, bdg):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global budget, orchestrator, registry, memory, telegram, rate_limiter, skill_loader
+    global budget, orchestrator, registry, memory, telegram, rate_limiter, skill_loader, _init_event
+    _init_event = asyncio.Event()  # created here so event loop is already running
 
     logger.info("=" * 50)
     logger.info("  Starting Nexus AI...")
@@ -269,7 +277,7 @@ async def websocket_endpoint(ws: WebSocket):
             if not user_input.strip():
                 continue
 
-            if not _init_complete:
+            if _init_event is None or not _init_event.is_set():
                 await ws.send_text(json.dumps({
                     "type": "final_answer",
                     "stream": "orchestrator",
@@ -304,7 +312,7 @@ async def websocket_endpoint(ws: WebSocket):
 async def api_status():
     return {
         "status": "running",
-        "init_complete": _init_complete,
+        "init_complete": (_init_event is not None and _init_event.is_set()),
         "budget": budget.get_status() if budget else {},
         "agents": [a.name for a in registry.list_agents()] if registry else [],
         "skills": [s.name for s in skill_loader.list_skills()] if skill_loader else [],
@@ -322,7 +330,7 @@ async def api_chat(request: Request):
             from fastapi.responses import JSONResponse
             return JSONResponse(status_code=429, content={"error": "Rate limit exceeded"})
 
-    if not _init_complete:
+    if _init_event is None or not _init_event.is_set():
         return {"answer": "System is still initializing...", "events": [], "budget": {}}
 
     body = await request.json()
@@ -371,7 +379,7 @@ async def api_dashboard():
                 pass
 
     return {
-        "status": "operational" if _init_complete else "initializing",
+        "status": "operational" if (_init_event is not None and _init_event.is_set()) else "initializing",
         "budget": budget.get_status() if budget else {},
         "agents": [
             {"name": a.name, "description": getattr(a, "description", "")}
