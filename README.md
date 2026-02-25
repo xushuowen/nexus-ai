@@ -67,7 +67,7 @@ I built Nexus AI to handle all of it — powered by **Gemini 2.0 Flash** via **G
 
 **技能演化圖 (D3.js Skill Graph)**
 ![Skill Evolution Graph](docs/screenshots/skill-graph.png)
-*D3.js force-directed graph visualizing all 22 skills organized by category (學術, 生產力, 工具, 資訊, 系統) radiating from the NEXUS CORE hub. Each node is a live, callable skill.*
+*D3.js force-directed graph visualizing all 23 skills organized by category (學術, 生產力, 工具, 資訊, 系統) radiating from the NEXUS CORE hub. Each node is a live, callable skill.*
 
 </td>
 <td align="center" width="50%">
