@@ -51,14 +51,14 @@ I built Nexus AI to handle all of it — powered by **Gemini 2.0 Flash** via **G
 
 **主控台 (Dashboard)**
 ![Dashboard Main Tab](docs/screenshots/dashboard-main.png)
-*Live agent status · token budget · daily schedule*
+*Real-time system status — 9 agents online, 23 skills loaded, token budget at 100%, Web UI and Telegram both live. Daily brief panel with quick-access shortcuts.*
 
 </td>
 <td align="center" width="50%">
 
-**對話 (Integrated Chat)**
+**對話 + Analysis Log**
 ![Dashboard Chat Tab](docs/screenshots/dashboard-chat.png)
-*Analysis log · streaming responses · active agent display*
+*Chat interface with live Analysis Log showing internal agent routing — query "查旋轉肌撕裂論文" matched academic_search skill. PubMed returns 9,411 results; top 8 shown with authors, journal, year, and direct links.*
 
 </td>
 </tr>
@@ -67,20 +67,18 @@ I built Nexus AI to handle all of it — powered by **Gemini 2.0 Flash** via **G
 
 **技能演化圖 (D3.js Skill Graph)**
 ![Skill Evolution Graph](docs/screenshots/skill-graph.png)
-*Force-directed graph of all 22 skills and 9 agents*
+*D3.js force-directed graph visualizing all 22 skills organized by category (學術, 生產力, 工具, 資訊, 系統) radiating from the NEXUS CORE hub. Each node is a live, callable skill.*
 
 </td>
 <td align="center" width="50%">
 
 **Telegram Vision Agent**
 ![Telegram Bot Demo](docs/screenshots/telegram-bot.png)
-*Send a textbook photo → Gemini analyzes anatomy structures*
+*Send an anatomy diagram photo via Telegram → Gemini Vision analyzes every structure and returns a structured description in Traditional Chinese with clinical functions.*
 
 </td>
 </tr>
 </table>
-
-> 📸 Start server → navigate to each tab → capture `1920×1080` → save to `docs/screenshots/`
 
 ---
 
