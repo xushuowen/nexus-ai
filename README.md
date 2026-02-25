@@ -5,7 +5,7 @@
 ### Multi-Agent Personal Intelligence System
 ### Powered by Gemini 2.0 Flash · Google GenAI SDK
 
-*Nine specialist agents. Twenty-two skills. One physical therapy student's AI — built to go beyond the text box.*
+*Nine specialist agents. Twenty-tree skills. One physical therapy student's AI — built to go beyond the text box.*
 
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776ab?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
