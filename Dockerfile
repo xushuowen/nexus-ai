@@ -3,9 +3,12 @@ FROM python:3.12-slim
 # Put code at /workspace/nexus/ so 'nexus' is importable as a package
 WORKDIR /workspace
 
-# Install system dependencies
+# Install system dependencies (build-essential for C extensions,
+# libsqlite3-dev for ChromaDB/SQLite FTS5, libgomp1 for sentence-transformers FAISS)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    libsqlite3-dev \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install
