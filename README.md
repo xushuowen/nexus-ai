@@ -119,7 +119,7 @@ All calls go through **Google GenAI SDK** (`google-generativeai`), with Groq Lla
 └──────────────┬──────────────────────────────┬──────────────┘
                │                              │
 ┌──────────────▼──────────────┐  ┌────────────▼──────────────┐
-│     SPECIALIST AGENTS (9)   │  │    SKILL ENGINE (22)       │
+│     SPECIALIST AGENTS (9)   │  │    SKILL ENGINE (23)       │
 │                             │  │                            │
 │  Reasoning   · chain-of-   │  │  academic_search  weather  │
 │               thought COT   │  │  translator       news     │
@@ -322,7 +322,7 @@ nexus/
 ├── main.py                    # FastAPI entry point, WebSocket, lifespan
 ├── config.yaml                # Model routing, budget, memory config
 ├── core/
-│   ├── orchestrator.py        # Central routing engine (9 agents + 22 skills)
+│   ├── orchestrator.py        # Central routing engine (9 agents + 23 skills)
 │   ├── budget.py              # Token budget enforcement
 │   ├── three_stream.py        # Streaming event system
 │   └── schedule_runner.py     # Async cron scheduler
@@ -332,7 +332,7 @@ nexus/
 │   ├── vision_agent.py        # Gemini multimodal image analysis ★
 │   ├── coder_agent.py         # Code generation + sandboxed execution
 │   └── ...
-├── skills/builtin/            # 22 built-in skills
+├── skills/builtin/            # 23 built-in skills
 │   ├── academic_search.py     # PubMed + Semantic Scholar + OpenAlex
 │   ├── study_notes.py         # PT subject notes (SQLite)
 │   ├── auto_schedule_skill.py # Natural language scheduling
