@@ -67,42 +67,68 @@ class AcademicSearchSkill(BaseSkill):
     name = "academic_search"
     description = "學術論文搜尋 — PubMed、Semantic Scholar、OpenAlex（免費，物理治療專用）"
     triggers = [
+        # General academic terms
         "論文", "paper", "期刊", "journal", "pubmed", "研究", "文獻",
-        "學術", "academic", "physical therapy", "物理治療", "文獻搜尋",
-        "semantic scholar", "openalex", "前十字韌帶", "ACL", "acl",
+        "學術", "academic", "文章", "article", "study", "studies",
+        "physical therapy", "物理治療", "文獻搜尋",
+        "semantic scholar", "openalex",
+        # Evidence / clinical
+        "實證", "evidence", "臨床", "clinical", "指引", "guideline",
+        "系統回顧", "systematic review", "meta分析", "meta-analysis", "RCT",
+        # PT anatomy / condition triggers
+        "前十字韌帶", "後十字韌帶", "ACL", "acl", "PCL", "pcl",
         "半月板", "meniscus", "旋轉肌", "rotator cuff", "椎間盤",
+        "肌腱", "韌帶", "骨折", "脫臼", "夾擠",
+        # Action phrases
         "找文獻", "找論文", "查論文", "查文獻", "搜論文",
+        "找研究", "查研究", "搜研究", "找文章", "查文章",
     ]
     category = "academic"
     requires_llm = False
 
     instructions = (
         "學術搜尋：\n"
-        "1. PubMed：「論文 physical therapy stroke」\n"
+        "1. PubMed：「旋轉肌撕裂 相關研究」\n"
         "2. Semantic Scholar：「論文 semantic scholar knee rehabilitation」\n"
         "3. 自動增強 PT 相關 MeSH 術語\n"
         "4. 搜尋後可說「存到骨科筆記」儲存結果"
     )
 
     intent_patterns = [
-        r"(找|查|搜).{0,5}(相關|有關|關於).{0,15}(論文|研究|文獻|期刊)",
-        r"(有沒有|有什麼).{0,10}(研究|論文|文獻).{0,10}(關於|有關|針對)",
+        r"(找|查|搜).{0,5}(相關|有關|關於).{0,15}(論文|研究|文獻|期刊|文章)",
+        r"(有沒有|有什麼|有哪些).{0,10}(研究|論文|文獻|文章).{0,10}(關於|有關|針對)?",
+        r"(有沒有|有什麼|有哪些).{0,10}(方法|方式|治療|復健).{0,15}(研究|實證|文獻)",
         r"(PubMed|pubmed|Semantic Scholar).{0,20}",
-        r"(ACL|PCL|半月板|旋轉肌|椎間盤|前十字韌帶|後十字韌帶).{0,20}(研究|論文|文獻|復健|治療)",
-        r"(物理治療|復健|PT).{0,10}(研究|論文|實證|evidence)",
+        r"(ACL|PCL|半月板|旋轉肌|椎間盤|前十字韌帶|後十字韌帶|肌腱|韌帶).{0,20}(研究|論文|文獻|復健|治療|撕裂|損傷)",
+        r"(物理治療|復健|PT).{0,10}(研究|論文|實證|evidence|文章)",
+        r"(最新|最近|近期|近年).{0,5}(研究|文獻|論文|指引)",
+        r"(臨床|實證).{0,10}(上|建議|方法|研究|指引|依據)",
+        r"(系統回顧|meta.?分析|RCT|隨機.{0,3}試驗).{0,20}",
+        r"(怎麼|如何|方法|方式).{0,10}(治療|復健|改善).{0,10}(有沒有|研究|文獻|實證)",
     ]
 
     # Only these trigger words get stripped from the query (not medical terms)
     _STRIP_TRIGGERS = [
-        "論文", "paper", "期刊", "journal", "pubmed", "文獻", "學術", "academic",
+        "論文", "paper", "期刊", "journal", "pubmed", "文獻", "文章", "article",
+        "學術", "academic", "study", "studies", "研究",
         "physical therapy", "物理治療", "文獻搜尋", "semantic scholar", "openalex",
+        "實證", "evidence", "臨床", "clinical", "指引", "guideline",
+        "系統回顧", "systematic review", "meta分析", "meta-analysis", "RCT",
         "找文獻", "找論文", "查論文", "查文獻", "搜論文",
+        "找研究", "查研究", "搜研究", "找文章", "查文章",
     ]
 
     # Filler words to strip from query before searching
-    _FILLER = ["查有關", "查一下", "找一下", "幫我找", "幫我查", "相關的", "相關",
-               "有哪些", "有沒有", "的論文", "的期刊", "的研究", "的文獻",
-               "查詢", "搜尋", "搜索", "查找", "資料"]
+    _FILLER = [
+        "查有關", "查一下", "找一下", "幫我找", "幫我查", "相關的", "相關",
+        "有哪些", "有沒有", "有什麼", "的論文", "的期刊", "的研究", "的文獻",
+        "的文章", "的治療", "的復健", "的方法", "的方式",
+        "查詢", "搜尋", "搜索", "查找", "資料",
+        "最新的", "最近的", "近期的", "近年的", "臨床上",
+        "怎麼治療", "如何治療", "怎麼復健", "如何復健",
+        "有沒有實證", "有沒有相關", "有哪些方法",
+        "關於", "針對", "有關", "是關於",
+    ]
 
     # Save-to-notes action keywords
     _SAVE_TRIGGERS = ["存到", "存進", "儲存", "記錄", "加到", "加入", "save to", "save"]
@@ -125,7 +151,7 @@ class AcademicSearchSkill(BaseSkill):
             query = re.sub(re.escape(t), " ", query, flags=re.IGNORECASE)
         for f in self._FILLER:
             query = query.replace(f, " ")
-        query = re.sub(r"\s+", " ", query).strip(" ?？，,。.、")
+        query = re.sub(r"\s+", " ", query).strip(" ?？，,。.、的是在上有")
 
         if not query or len(query) < 2:
             return SkillResult(
@@ -388,12 +414,16 @@ class AcademicSearchSkill(BaseSkill):
     def _enhance_query(self, query: str) -> str:
         """Auto-enhance query with MeSH terms for PT-related searches."""
         query_lower = query.lower()
+        enhanced = query_lower
+        replaced = False
         for keyword, mesh in PT_MESH_TERMS.items():
-            if keyword in query_lower:
-                # Replace keyword with MeSH term for better PubMed results
-                query = query_lower.replace(keyword, mesh, 1)
-                return query
-        return query
+            if keyword in enhanced:
+                enhanced = enhanced.replace(keyword, mesh, 1)
+                replaced = True
+        # Strip trailing/leading particles after enhancement
+        enhanced = re.sub(r'^(是|的|在|上|有)+', '', enhanced).strip()
+        enhanced = re.sub(r'(是|的|在)+$', '', enhanced).strip()
+        return enhanced if replaced else query
 
     def _parse_pubmed_xml(self, xml_text: str) -> list[dict[str, str]]:
         """Parse PubMed XML response into article dicts."""
