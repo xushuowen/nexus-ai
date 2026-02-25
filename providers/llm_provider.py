@@ -95,6 +95,12 @@ class LLMProvider:
             contents=prompt,
             config=config,
         )
+        if not response.candidates:
+            logger.warning("Gemini returned no candidates (likely safety filtered)")
+            return ""
+        candidate = response.candidates[0]
+        if candidate.content and candidate.content.parts:
+            return "".join(p.text for p in candidate.content.parts if hasattr(p, "text"))
         return response.text or ""
 
     @staticmethod
@@ -118,6 +124,7 @@ class LLMProvider:
         temperature: float | None = None,
         max_tokens: int | None = None,
         system_prompt: str | None = None,
+        _depth: int = 0,
     ) -> str:
         """Send a completion request with budget checks."""
         spec = model_spec or self.router.route(task_type)
@@ -166,8 +173,8 @@ class LLMProvider:
             raise
         except Exception as e:
             logger.error(f"LLM call failed ({spec.model_id}): {e}")
-            # Try fallback model
-            if spec.model_id != self.router.get_fallback().model_id:
+            # Try fallback model (max one retry to prevent infinite recursion)
+            if _depth < 1 and spec.model_id != self.router.get_fallback().model_id:
                 logger.info("Trying fallback model...")
                 return await self.complete(
                     prompt=prompt,
@@ -176,6 +183,7 @@ class LLMProvider:
                     temperature=temperature,
                     max_tokens=max_tokens,
                     system_prompt=system_prompt,
+                    _depth=_depth + 1,
                 )
             raise
 

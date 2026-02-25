@@ -42,7 +42,7 @@ class MemoryManagerSkill(BaseSkill):
     async def execute(self, query: str, context: dict[str, Any]) -> SkillResult:
         # Inject memory from context if not already set
         if self._memory is None:
-            self._memory = context.get("memory_obj")
+            self._memory = context.get("memory") or context.get("memory_obj")
 
         if self._memory is None:
             return SkillResult(

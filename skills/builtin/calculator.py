@@ -163,15 +163,9 @@ class CalculatorSkill(BaseSkill):
         text = re.sub(r'(\d+(?:\.\d+)?)\s*%\s*(of|的)\s*(\d+(?:\.\d+)?)',
                       lambda m: str(float(m.group(1)) / 100 * float(m.group(3))), text)
 
-        # Remove units and filler text, keep math chars
-        # Allow: digits, operators, parentheses, decimal, spaces, math func names
-        allowed = re.sub(r'[^\d\+\-\*\/\(\)\.\,\s\^sqrtsincotaglbpief]', ' ', text)
-        # Restore function names
-        for func in ["sqrt", "sin", "cos", "tan", "log", "exp", "abs", "ceil", "floor",
-                     "factorial", "pi", "e", "asin", "acos", "atan"]:
-            if func in text:
-                # already preserved by allowed chars
-                pass
+        # Remove non-math characters — keep ALL letters so function names
+        # like exp(), round(), floor(), factorial() are preserved intact.
+        allowed = re.sub(r'[^\d\+\-\*\/\(\)\.\,\s\^a-zA-Z_]', ' ', text)
         allowed = allowed.strip()
 
         # Validate: must contain at least one digit

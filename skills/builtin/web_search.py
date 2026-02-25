@@ -35,15 +35,14 @@ class WebSearchSkill(BaseSkill):
 
         try:
             import httpx
-            from nexus.security.url_filter import is_url_safe
-
-            url = f"https://html.duckduckgo.com/html/?q={query}"
-            safe, reason = is_url_safe(url)
-            if not safe:
-                return SkillResult(content=f"URL 被封鎖：{reason}", success=False, source=self.name)
 
             async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
-                resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                # Use params= so httpx properly URL-encodes the query
+                resp = await client.get(
+                    "https://html.duckduckgo.com/html/",
+                    params={"q": query},
+                    headers={"User-Agent": "Mozilla/5.0"},
+                )
                 resp.raise_for_status()
                 html = resp.text
 

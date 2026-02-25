@@ -34,9 +34,17 @@ def set_memory(memory: Any) -> None:
 async def chat(request: Request) -> dict[str, Any]:
     require_auth(request)
     if _rate_limiter:
-        allowed, _ = _rate_limiter.check("api_v1")
+        allowed, remaining = _rate_limiter.check("api_v1")
         if not allowed:
-            return JSONResponse(status_code=429, content={"error": "Rate limit exceeded"})
+            return JSONResponse(
+                status_code=429,
+                content={"error": "Rate limit exceeded. Try again in 60 seconds."},
+                headers={
+                    "X-RateLimit-Limit": str(_rate_limiter.max_per_minute),
+                    "X-RateLimit-Remaining": "0",
+                    "Retry-After": "60",
+                },
+            )
     body = await request.json()
     message = ChannelMessage(
         channel="api",

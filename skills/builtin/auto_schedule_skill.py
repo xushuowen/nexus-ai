@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import time
+import uuid
 from dataclasses import dataclass, asdict
 from typing import Any
 
@@ -133,7 +134,7 @@ class AutoScheduleSkill(BaseSkill):
                 success=False, source=self.name,
             )
 
-        sched_id = f"sched_{int(time.time())}"
+        sched_id = f"sched_{uuid.uuid4().hex[:8]}"
         entry = ScheduleEntry(
             id=sched_id, name=action[:40],
             action=action, time=time_str, days=days_str,
@@ -264,7 +265,11 @@ class AutoScheduleSkill(BaseSkill):
         # ── Action: remove all time/day keywords ──
         action = text
         for t in self.triggers:
-            action = action.replace(t, "")
+            if t.isascii():
+                # English words: use word boundary to avoid partial matches
+                action = re.sub(r'\b' + re.escape(t) + r'\b', '', action, flags=re.IGNORECASE)
+            else:
+                action = action.replace(t, "")
         action = re.sub(r'每[天日週]|每個工作日|每個週末|工作日|平日|週末|假日', '', action)
         action = re.sub(r'每週[一二三四五六日]+', '', action)
         action = re.sub(r'星期[一二三四五六日天]|週[一二三四五六日]', '', action)

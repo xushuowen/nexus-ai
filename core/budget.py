@@ -3,6 +3,7 @@
 import asyncio
 import json
 import time
+from collections import deque
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Awaitable
@@ -31,7 +32,7 @@ class BudgetController:
         self._curiosity_ops_used: int = 0
         self._request_count: int = 0
         self._last_reset: datetime = datetime.now()
-        self._history: list[dict[str, Any]] = []
+        self._history: deque[dict[str, Any]] = deque(maxlen=500)
         self._lock = asyncio.Lock()
         self._state_path = config.data_dir() / "budget_state.json"
         # Warning callback: fired once per day when usage crosses warning_threshold
@@ -117,9 +118,6 @@ class BudgetController:
                 "source": source,
                 "metadata": metadata or {},
             })
-            # Cap history to avoid unbounded memory growth
-            if len(self._history) > 500:
-                self._history = self._history[-500:]
             self._save_state()
             # Check if we just crossed the warning threshold for the first time today
             if self.is_warning and not self._warning_sent and self._on_warning:

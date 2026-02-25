@@ -276,13 +276,20 @@ class Orchestrator:
 
     def _detect_specialist(self, user_input: str) -> str | None:
         """Detect if a specialist agent is needed using keyword matching (0 tokens)."""
+        import re
         text = user_input.lower()
+        # Count "words" in a CJK-aware way: ASCII words + each CJK char is ~1 word
+        ascii_words = len(text.split())
+        cjk_chars = len(re.findall(r'[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7ff]', text))
+        approx_words = max(ascii_words, cjk_chars)
+
         scores: dict[str, int] = {}
         for agent_name, keywords in SPECIALIST_TRIGGERS.items():
             count = sum(1 for kw in keywords if kw in text)
             if count >= 2:
                 scores[agent_name] = count
-            elif count == 1 and len(text.split()) <= 5:
+            elif count == 1 and approx_words <= 8:
+                # Short queries (≤8 tokens including CJK) only need 1 keyword match
                 scores[agent_name] = count
 
         if not scores:

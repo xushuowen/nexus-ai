@@ -500,7 +500,7 @@
 #d-messages {
     flex: 1;
     overflow-y: auto;
-    padding: 14px 18px;
+    padding: 20px 18px 8px;
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -511,9 +511,10 @@
 #d-input-area {
     padding: 10px 16px 14px;
     border-top: 1px solid var(--border);
-    background: rgba(5, 12, 30, 0.9);
+    background: rgba(4, 10, 26, 0.92);
     flex-shrink: 0;
 }
+/* dashboard input frame inherits .input-frame from style.css */
 
 /* Responsive: tablet */
 @media (max-width: 900px) {

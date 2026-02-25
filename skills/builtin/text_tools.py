@@ -39,7 +39,10 @@ class TextToolsSkill(BaseSkill):
 
         if "base64" in text_lower:
             return self._base64(query)
-        elif any(k in text_lower for k in ["json格式", "format json", "json format", "格式化"]):
+        elif "json" in text_lower and any(k in text_lower for k in ["格式", "format", "美化", "排版", "整理"]):
+            # Require "json" to be present to avoid triggering on generic "格式化"
+            return self._format_json(query)
+        elif any(k in text_lower for k in ["json格式", "format json", "json format"]):
             return self._format_json(query)
         else:
             return self._word_count(query)

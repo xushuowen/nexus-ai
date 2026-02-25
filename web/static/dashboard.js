@@ -4,11 +4,29 @@
 
 const SKILL_CATEGORIES = {
     information:  { label: '資訊',   color: '#00d4ff', emoji: '◈' },
-    research:     { label: '研究',   color: '#00ffaa', emoji: '⬡' },
+    research:     { label: '學術',   color: '#00ffaa', emoji: '⬡' },
     productivity: { label: '生產力', color: '#ff9a3c', emoji: '◆' },
     tools:        { label: '工具',   color: '#aa66ff', emoji: '◇' },
     system:       { label: '系統',   color: '#ffd700', emoji: '✦' },
     general:      { label: '其他',   color: '#8ab4d8', emoji: '○' },
+};
+
+// Map skill file categories → 6 primary display categories
+const CAT_NORMALIZE = {
+    utility:     'tools',       // calculator, weather, sysinfo, text_tools
+    academic:    'research',    // academic_search, study_notes
+    automation:  'productivity',// auto_schedule
+    finance:     'information', // currency, stock
+    media:       'information', // youtube_summary
+    memory:      'system',      // memory_manager
+    personal:    'general',     // diary
+    text:        'tools',       // translator, summarize
+    web:         'information', // web_search
+    creative:    'productivity',// image_gen
+    development: 'tools',       // github
+    document:    'tools',       // pdf_reader
+    meta:        'system',      // skill_architect
+    workspace:   'system',      // workspace skills
 };
 
 let dashData = null;
@@ -24,6 +42,18 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchDashboard();
     setInterval(fetchDashboard, 30000);
     setupGraphResizeObserver();
+    // Chat module init
+    setText('d-session-id', dSessionId.slice(-6));
+    const inp = document.getElementById('d-user-input');
+    if (inp) {
+        inp.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dSendMessage(); }
+        });
+    }
+    const sendBtn = document.getElementById('d-send-btn');
+    if (sendBtn) sendBtn.addEventListener('click', dSendMessage);
+    // Start WebSocket immediately so it's ready when user opens chat tab
+    dConnectWs();
 });
 
 // ─── Data Fetch ─────────────────────────────────────────
@@ -245,7 +275,8 @@ function renderSkillGraph(skills) {
     // ─── Build node/link data ─────────────────────────
     const catGroups = {};
     skills.forEach(s => {
-        const k = s.category || 'general';
+        const raw = s.category || 'general';
+        const k   = CAT_NORMALIZE[raw] || (SKILL_CATEGORIES[raw] ? raw : 'general');
         if (!catGroups[k]) catGroups[k] = [];
         catGroups[k].push(s);
     });
@@ -508,16 +539,7 @@ let dIsProcessing = false;
 let dMsgCount = 0;
 let dWsReady = false;
 
-// ─── Initialize chat input listener ─────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-    setText('d-session-id', dSessionId.slice(-6));
-    const inp = document.getElementById('d-user-input');
-    if (inp) {
-        inp.addEventListener('keydown', e => {
-            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dSendMessage(); }
-        });
-    }
-});
+// (chat input listener and WS init merged into main DOMContentLoaded above)
 
 // ─── WebSocket ───────────────────────────────────────────
 function dConnectWs(onOpen) {
@@ -705,7 +727,7 @@ function dFormatMsg(text) {
 // ─── Send message ─────────────────────────────────────────
 function dSendMessage() {
     const input = document.getElementById('d-user-input');
-    const text  = input?.value.trim();
+    const text  = (input?.value ?? '').trim();
     if (!text || dIsProcessing) return;
 
     dAddUserMsg(text);

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any
 
@@ -87,10 +88,15 @@ class YouTubeSummarySkill(BaseSkill):
             return SkillResult(content=f"摘要生成失敗: {e}", success=False, source=self.name)
 
     async def _get_transcript(self, video_id: str) -> str:
-        """Try to get YouTube transcript."""
+        """Try to get YouTube transcript (blocking SDK wrapped in thread)."""
         try:
             from youtube_transcript_api import YouTubeTranscriptApi
-            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=["zh-TW", "zh", "en"])
+            # get_transcript() is synchronous; run in thread to avoid blocking the event loop
+            transcript = await asyncio.to_thread(
+                YouTubeTranscriptApi.get_transcript,
+                video_id,
+                languages=["zh-TW", "zh", "en"],
+            )
             return " ".join(entry["text"] for entry in transcript)
         except Exception:
             return ""

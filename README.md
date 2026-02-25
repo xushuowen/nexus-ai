@@ -3,15 +3,17 @@
 # ◈ NEXUS AI
 
 ### Multi-Agent Personal Intelligence System
+### Powered by Gemini 2.0 Flash · Google GenAI SDK
 
-*Nine specialist agents. Twenty-two skills. One physical therapy student's daily driver.*
+*Nine specialist agents. Twenty-two skills. One physical therapy student's AI — built to go beyond the text box.*
 
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776ab?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Gemini 2.0 Flash](https://img.shields.io/badge/Gemini-2.0%20Flash-4285f4?style=flat-square&logo=google&logoColor=white)](https://ai.google.dev)
-[![Azure App Service](https://img.shields.io/badge/Azure-App%20Service-0078d4?style=flat-square&logo=microsoftazure&logoColor=white)](https://azure.microsoft.com)
+[![Google GenAI SDK](https://img.shields.io/badge/Google-GenAI%20SDK-34a853?style=flat-square&logo=google&logoColor=white)](https://ai.google.dev/gemini-api/docs)
+[![Google Cloud Run](https://img.shields.io/badge/Google%20Cloud-Run-4285f4?style=flat-square&logo=googlecloud&logoColor=white)](https://cloud.google.com/run)
 [![License: MIT](https://img.shields.io/badge/License-MIT-ffd700?style=flat-square)](LICENSE)
-[![Microsoft AI Dev Days 2026](https://img.shields.io/badge/Hackathon-Microsoft%20AI%20Dev%20Days%202026-00a4ef?style=flat-square&logo=microsoft)](https://github.com/xushuowen/nexus-ai)
+[![Gemini Live Agent Challenge](https://img.shields.io/badge/Gemini-Live%20Agent%20Challenge%202026-4285f4?style=flat-square&logo=google)](https://geminiliveagentchallenge.devpost.com)
 
 </div>
 
@@ -19,19 +21,20 @@
 
 ## 🎬 Demo Video
 
-> ▶ **[Watch 2-Minute Demo](https://youtu.be/TODO)** — ACL paper search · Clinical notes · Telegram vision · Architecture overview
+> ▶ **[Watch Demo (< 4 min)](https://youtu.be/TODO)** — Anatomy image analysis · PubMed search · Real-time agent reasoning · Multimodal output
 
 ---
 
-## The Problem
+## Beyond the Text Box
 
-I'm a physical therapy student. Every day I need to:
-- Find **peer-reviewed papers** on clinical topics (MeSH-quality search, not Google)
-- Organize notes **by PT subject** (anatomy, orthopedics, neurology…)
-- Get answers about **clinical anatomy diagrams** from my textbooks
-- **Schedule reminders** that actually fire, even when I'm away from my desk
+I'm a physical therapy student. Clinical information doesn't arrive as plain text — it comes as:
 
-No single AI tool does all of this. So I built one that does.
+- **Anatomy diagrams** in textbooks I need explained instantly
+- **Peer-reviewed papers** buried in PubMed, not Google
+- **Clinical notes** organized by subject (anatomy, orthopedics, neurology…)
+- **Reminders and schedules** that need to fire even when I'm away from my desk
+
+I built Nexus AI to handle all of it — powered by **Gemini 2.0 Flash** via **Google GenAI SDK**, going beyond text with multimodal vision, structured output, and real-time multi-channel delivery.
 
 ---
 
@@ -50,7 +53,7 @@ No single AI tool does all of this. So I built one that does.
 
 **對話 (Integrated Chat)**
 ![Dashboard Chat Tab](docs/screenshots/dashboard-chat.png)
-*Analysis log · chat · active agent — all in one tab*
+*Analysis log · streaming responses · active agent display*
 
 </td>
 </tr>
@@ -64,16 +67,28 @@ No single AI tool does all of this. So I built one that does.
 </td>
 <td align="center" width="50%">
 
-**Telegram Bot**
+**Telegram Vision Agent**
 ![Telegram Bot Demo](docs/screenshots/telegram-bot.png)
-*Vision agent · anatomy Q&A · scheduling*
+*Send a textbook photo → Gemini analyzes anatomy structures*
 
 </td>
 </tr>
 </table>
 
-> 📸 **Screenshot guide:** Start server → navigate to each tab → capture `1920×1080`
-> Save files to `docs/screenshots/` with the filenames above.
+> 📸 Start server → navigate to each tab → capture `1920×1080` → save to `docs/screenshots/`
+
+---
+
+## Multimodal: How Gemini Powers Every Layer
+
+| Input | Gemini Capability | Output |
+|-------|------------------|--------|
+| Anatomy diagram photo (Telegram) | Vision API — `gemini-2.0-flash` | Structured Chinese description of anatomical structures + clinical functions |
+| Chinese clinical query (text) | Multimodal understanding + generation | Routed response in Traditional Chinese with markdown formatting |
+| PubMed paper (text + metadata) | Synthesis + summarization | Structured citation card with PMID, authors, relevance |
+| Natural language schedule (text) | Intent extraction | Parsed cron expression → autonomous execution |
+
+All calls go through **Google GenAI SDK** (`google-generativeai`), with Groq Llama as offline fallback.
 
 ---
 
@@ -101,7 +116,7 @@ No single AI tool does all of this. So I built one that does.
 │  Reasoning   · chain-of-   │  │  academic_search  weather  │
 │               thought COT   │  │  translator       news     │
 │  Research    · web + synth  │  │  calculator       stock    │
-│  Vision      · image/OCR    │  │  currency         github   │
+│  Vision      · Gemini vision│  │  currency         github   │
 │  Coder       · code gen     │  │  reminder         diary    │
 │  Knowledge   · fact recall  │  │  auto_schedule    pomodoro │
 │  File        · local files  │  │  study_notes      pdf_read │
@@ -120,9 +135,14 @@ No single AI tool does all of this. So I built one that does.
 └──────────────┬──────────────────────────────────────────────┘
                │
 ┌──────────────▼──────────────────────────────────────────────┐
-│            LLM PROVIDER                                      │
-│  Primary : Gemini 2.0 Flash  (Google GenAI SDK)             │
+│            LLM PROVIDER  (Google GenAI SDK)                  │
+│  Primary : Gemini 2.0 Flash  (gemini-2.0-flash)             │
 │  Fallback: Groq Llama 3.3 70B                               │
+└──────────────────────────────────────────────────────────────┘
+               │
+┌──────────────▼──────────────────────────────────────────────┐
+│            DEPLOYMENT                                        │
+│  Google Cloud Run (production) · Local uvicorn (dev)        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -130,42 +150,50 @@ No single AI tool does all of this. So I built one that does.
 
 ## Key Features
 
-### 🧠 Multi-Agent Orchestration
-Every request is scored against all 9 agents simultaneously. The highest-confidence agent handles it — no manual selection, no keyword commands.
+### 🔮 Gemini 2.0 Flash — Core Intelligence
+Every agent calls Gemini 2.0 Flash via **Google GenAI SDK**. The Vision agent uses Gemini's multimodal API to analyze images sent via Telegram — anatomy diagrams, X-rays, clinical figures — and returns structured descriptions in Traditional Chinese.
 
 ```python
-# Example: "幫我找前十字韌帶復健的相關論文"
-# Orchestrator automatically routes to academic_search skill
-# which expands "前十字韌帶" → "Anterior Cruciate Ligament[MeSH]"
-# and queries PubMed's E-utilities API directly
+# Example: user sends anatomy photo via Telegram
+# Vision agent routes to Gemini multimodal endpoint
+# Returns: structured anatomical description in zh-TW
+```
+
+### 🧠 Multi-Agent Orchestration — Zero Manual Routing
+Every request is scored against all 9 agents simultaneously. The highest-confidence agent handles it automatically.
+
+```python
+# Example: 「幫我找前十字韌帶復健的相關論文」
+# Orchestrator scores all 9 agents
+# Routes to: academic_search (score=0.92)
+# Expands: 「前十字韌帶」→「Anterior Cruciate Ligament[MeSH]」
+# Queries: PubMed E-utilities API directly
 ```
 
 ### 🔬 PT-Domain Academic Search
-Three real databases — **PubMed** (NCBI E-utilities), **Semantic Scholar**, **OpenAlex** — with automatic MeSH term expansion for physical therapy vocabulary. Returns real PMIDs, authors, journals, and direct links.
+Three real databases — **PubMed** (NCBI E-utilities), **Semantic Scholar**, **OpenAlex** — with automatic MeSH term expansion for physical therapy vocabulary. Returns real PMIDs, authors, journals, direct links.
 
-### 📝 Persistent Study Notes System
-Notes organized by PT subject category (解剖學, 骨科, 神經, 心肺…). Stored in SQLite, searchable by keyword, reviewable by subject. LLM-powered quiz generation from saved notes.
-
-### 👁️ Multimodal Vision
-Send any image via Telegram → Vision agent analyzes with Gemini's multimodal API. Clinical anatomy diagrams, X-rays, textbook figures — described in Traditional Chinese.
+### 📝 Persistent Study Notes
+Notes organized by PT subject (解剖學, 骨科, 神經, 心肺…). Stored in SQLite, searchable by keyword, reviewable by subject. LLM-powered quiz generation from saved notes.
 
 ### 📅 Autonomous Scheduler
 Set recurring tasks in natural language:
 - `「每天早上6點 生成晨報」` — daily at 6AM
 - `「每週一三五早上7點 英文單字練習」` — Mon/Wed/Fri
-Executes automatically and sends Telegram notifications.
+
+Executes automatically and sends Telegram push notifications.
 
 ### 💡 Three-Layer NLP Routing
-1. **Trigger keywords** — instant match, no LLM needed
-2. **Intent patterns** — regex covering 80%+ of requests
-3. **LLM fallback** — only when patterns don't match
+1. **Trigger keywords** — instant match, no Gemini call needed
+2. **Intent patterns** — regex covers 80%+ of requests
+3. **Gemini fallback** — only when patterns don't match
 
 ### 🛡️ Responsible AI by Design
 - Hard daily token budget (never exceeds free tier)
 - Filesystem sandbox (agents limited to `data/` and `workspace/`)
-- SSRF protection (internal IPs, metadata endpoints blocked)
+- SSRF protection (internal IPs, cloud metadata endpoints blocked)
 - Rate limiter (30 req/min per IP)
-- Local-only memory (no data leaves device except LLM API call)
+- Local-only memory (no data leaves device except the Gemini API call)
 
 ---
 
@@ -178,7 +206,7 @@ Executes automatically and sends Telegram notifications.
 | Agent status | ✅ | ✅ | ❌ |
 | Skill graph | ❌ | ✅ D3.js | ❌ |
 | Schedule view | ❌ | ✅ Daily brief | ❌ |
-| Image input | ❌ | ❌ | ✅ |
+| Image input | ❌ | ❌ | ✅ Gemini vision |
 | File upload | ❌ | ❌ | ✅ |
 | Mobile-friendly | ✅ | ✅ | ✅ native |
 
@@ -188,17 +216,32 @@ Executes automatically and sends Telegram notifications.
 
 | Layer | Technology |
 |-------|-----------|
-| LLM | Gemini 2.0 Flash (Google GenAI SDK) · Groq Llama 3.3 70B fallback |
+| LLM | **Gemini 2.0 Flash** (Google GenAI SDK) · Groq Llama 3.3 70B fallback |
 | Backend | Python 3.11 · FastAPI · asyncio |
 | Memory | SQLite FTS5 · ChromaDB · NetworkX |
 | Frontend | Vanilla JS · WebSocket · D3.js v7 · Orbitron/Rajdhani fonts |
 | Bot | python-telegram-bot |
-| Deployment | Azure App Service (East Asia) |
-| Security | Custom SSRF filter · Rate limiter · Budget controller |
+| Deployment | **Google Cloud Run** |
+| Security | Custom SSRF filter · Rate limiter · Token budget controller |
 
 ---
 
-## Quick Start
+## Google Cloud Deployment
+
+```bash
+# Build and deploy to Cloud Run
+gcloud run deploy nexus-ai \
+  --source . \
+  --region asia-east1 \
+  --allow-unauthenticated \
+  --set-env-vars GEMINI_API_KEY=your_key
+```
+
+Or use the included `Dockerfile` for local container builds.
+
+---
+
+## Quick Start (Local)
 
 ```bash
 # 1. Clone
@@ -210,12 +253,13 @@ pip install -r requirements.txt
 
 # 3. Configure
 cp .env.example .env
-# Edit .env — only GEMINI_API_KEY is required to get started
+# Edit .env — only GEMINI_API_KEY is required
 
 # 4. Run
+cd nexus
 python run.py
-# Web UI:    http://localhost:8000
-# Dashboard: http://localhost:8000/dashboard
+# Web UI:    http://localhost:8001
+# Dashboard: http://localhost:8001/dashboard
 ```
 
 ## Environment Variables
@@ -223,29 +267,29 @@ python run.py
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GEMINI_API_KEY` | **Yes** | Google AI Studio — free at [aistudio.google.com](https://aistudio.google.com) |
-| `TELEGRAM_BOT_TOKEN` | Optional | From @BotFather — enables Telegram bot |
+| `TELEGRAM_BOT_TOKEN` | Optional | From @BotFather — enables Telegram vision agent |
 | `TELEGRAM_OWNER_ID` | Optional | Your Telegram user ID (for push notifications) |
-| `GROQ_API_KEY` | Optional | Groq free tier — fallback LLM |
+| `GROQ_API_KEY` | Optional | Groq free tier — offline fallback LLM |
 | `GITHUB_TOKEN` | Optional | Increases GitHub API rate limit 60→5000 req/hr |
 
 ---
 
 ## Test Instructions for Judges
 
-Start the server, open `http://localhost:8000/dashboard`, click the **「對話」** tab.
+Start the server, open `http://localhost:8001/dashboard`, click the **「對話」** tab.
 
 | # | Input | What it demonstrates |
 |---|-------|---------------------|
-| 1 | `幫我找前十字韌帶復健的相關論文` | Academic search → PubMed MeSH expansion |
-| 2 | `台北天氣` | Weather skill, no LLM needed |
-| 3 | `幫我翻譯：Physical therapy improves quality of life` | Translation via Gemini |
-| 4 | `計算 sqrt(144) + 3^4` | Safe AST-based calculator, no eval() |
+| 1 | `幫我找前十字韌帶復健的相關論文` | Gemini routes → PubMed MeSH expansion |
+| 2 | `台北天氣` | Skill trigger (no Gemini needed) |
+| 3 | `幫我翻譯：Physical therapy improves quality of life` | Gemini translation |
+| 4 | `計算 sqrt(144) + 3^4` | Safe AST calculator (no eval()) |
 | 5 | `1000 美金等於多少台幣` | Real-time currency exchange |
 | 6 | `github trending python` | GitHub API trending repos |
 | 7 | `筆記 解剖學 旋轉肌群包括棘上肌棘下肌小圓肌肩胛下肌` | Study notes → SQLite insert |
-| 8 | `排程 列出` | Show any saved schedules |
+| 8 | **Telegram**: Send anatomy diagram photo | Gemini vision → structured analysis |
 
-All tests work with only `GEMINI_API_KEY` set.
+All text tests work with only `GEMINI_API_KEY`. Test #8 requires `TELEGRAM_BOT_TOKEN`.
 
 ---
 
@@ -253,17 +297,17 @@ All tests work with only `GEMINI_API_KEY` set.
 
 ```
 nexus/
-├── main.py                    # FastAPI entry point, lifespan, WebSocket
+├── main.py                    # FastAPI entry point, WebSocket, lifespan
 ├── config.yaml                # Model routing, budget, memory config
 ├── core/
 │   ├── orchestrator.py        # Central routing engine (9 agents + 22 skills)
-│   ├── budget.py              # Token budget enforcement, atomic state
+│   ├── budget.py              # Token budget enforcement
 │   ├── three_stream.py        # Streaming event system
 │   └── schedule_runner.py     # Async cron scheduler
 ├── agents/                    # 9 specialist agents
 │   ├── reasoning_agent.py     # Chain-of-thought multi-step reasoning
 │   ├── research_agent.py      # Web search + synthesis
-│   ├── vision_agent.py        # Gemini multimodal image analysis
+│   ├── vision_agent.py        # Gemini multimodal image analysis ★
 │   ├── coder_agent.py         # Code generation + sandboxed execution
 │   └── ...
 ├── skills/builtin/            # 22 built-in skills
@@ -272,29 +316,18 @@ nexus/
 │   ├── auto_schedule_skill.py # Natural language scheduling
 │   ├── calculator.py          # Safe AST evaluator
 │   ├── currency.py            # Real-time exchange rates
-│   ├── stock.py               # Yahoo Finance quotes
 │   └── ...
 ├── providers/
-│   ├── llm_provider.py        # Google GenAI SDK + LiteLLM wrapper
-│   └── model_config.py        # Model routing configuration
+│   └── llm_provider.py        # Google GenAI SDK + LiteLLM wrapper ★
 ├── memory/
 │   └── hybrid_store.py        # 4-layer memory orchestration
 ├── gateway/
 │   ├── telegram_channel.py    # Telegram bot (text + image + file)
 │   └── api_channel.py         # REST API gateway
-├── security/
-│   ├── url_filter.py          # SSRF protection
-│   ├── auth.py                # API key authentication
-│   └── rate_limiter.py        # Per-IP rate limiting
-└── web/
-    ├── templates/
-    │   ├── index.html         # Chat interface (SAO sci-fi theme)
-    │   └── dashboard.html     # Dashboard with integrated chat tab
-    └── static/
-        ├── style.css          # SAO × Tensura UI theme
-        ├── dashboard.css      # Dashboard + chat tab layout
-        ├── app.js             # Chat WebSocket controller
-        └── dashboard.js       # Dashboard + D3.js + chat module
+└── security/
+    ├── url_filter.py          # SSRF protection
+    ├── auth.py                # API key authentication
+    └── rate_limiter.py        # Per-IP rate limiting
 ```
 
 ---
@@ -308,7 +341,7 @@ nexus/
 | SSRF protection | Blocks `localhost`, `169.254.x.x`, `10.x`, private ranges, cloud metadata |
 | Rate limiting | 30 requests/minute per client IP |
 | Input sanitization | Shell agent blocks dangerous args (`-c`, `eval`, `exec`, `rm -rf`) |
-| Data privacy | All memory stored on-device; only the LLM API call leaves the machine |
+| Data privacy | All memory stored on-device; only the Gemini API call leaves the machine |
 | Transparent reasoning | Every response shows which agent handled it and the routing trace |
 
 ---
@@ -317,14 +350,12 @@ nexus/
 
 <div align="center">
 
-**Microsoft AI Dev Days Hackathon 2026**
-Category: **Multi-Agent Systems**
+**Gemini Live Agent Challenge 2026**
+Track: **Creative Storytellers** · Multimodal AI
 
-Nexus AI demonstrates production-grade multi-agent orchestration with real-world daily use.
-Built with the Microsoft AI ecosystem: Azure App Service, GitHub Models integration,
-and responsible AI patterns throughout.
+Nexus AI demonstrates production-grade multi-agent orchestration powered entirely by **Gemini 2.0 Flash** and **Google GenAI SDK**. It goes beyond the text box with real-time multimodal vision (anatomy diagrams → structured clinical descriptions), 9 specialist agents, 22 skills, and a 4-layer memory system built for real daily use.
 
-[🔗 github.com/xushuowen/nexus-ai](https://github.com/xushuowen/nexus-ai)
+[🔗 geminiliveagentchallenge.devpost.com](https://geminiliveagentchallenge.devpost.com)
 
 </div>
 

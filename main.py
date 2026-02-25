@@ -32,7 +32,6 @@ from nexus.skills.skill_loader import SkillLoader
 from nexus.core.schedule_runner import ScheduleRunner
 
 import datetime
-import json
 from dataclasses import asdict as _dc_asdict
 
 load_dotenv()
@@ -374,10 +373,20 @@ async def api_chat(request: Request):
     require_auth(request)
 
     if rate_limiter:
-        allowed, remaining = rate_limiter.check("api")
+        # Use client IP for per-user rate limiting (falls back to "api" if no IP)
+        client_ip = request.client.host if request.client else "api"
+        allowed, remaining = rate_limiter.check(client_ip)
         if not allowed:
             from fastapi.responses import JSONResponse
-            return JSONResponse(status_code=429, content={"error": "Rate limit exceeded"})
+            return JSONResponse(
+                status_code=429,
+                content={"error": "Rate limit exceeded. Try again in 60 seconds."},
+                headers={
+                    "X-RateLimit-Limit": str(rate_limiter.max_per_minute),
+                    "X-RateLimit-Remaining": "0",
+                    "Retry-After": "60",
+                },
+            )
 
     if _init_event is None or not _init_event.is_set():
         return {"answer": "System is still initializing...", "events": [], "budget": {}}
