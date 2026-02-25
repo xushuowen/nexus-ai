@@ -306,7 +306,7 @@ class LLMProvider:
         b64 = base64.b64encode(data).decode()
         mime = mimetypes.guess_type(image_path)[0] or "image/jpeg"
 
-        # Route to a vision-capable model (config.yaml: github-gpt4o has use_for: ["vision"])
+        # Route to vision-capable model (config.yaml: gemini-vision has use_for: ["vision"])
         spec = self.router.route("vision")
         tokens_est = self._count_tokens(prompt) + 300  # +300 for image encoding overhead
         mt = min(spec.max_tokens, self.budget.per_request_max)

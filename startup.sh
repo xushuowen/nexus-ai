@@ -1,10 +1,33 @@
 #!/bin/bash
-# Azure App Service startup script
-# Fix: code is deployed to /home/site/wwwroot/ but imports expect a "nexus" package.
-# Create a symlink so Python can resolve "from nexus import ..." correctly.
+# Google Cloud Run — build and deploy script
+# Usage: ./startup.sh [project-id] [region]
+#
+# Prerequisites:
+#   gcloud auth login
+#   gcloud config set project YOUR_PROJECT_ID
 
-ln -sf /home/site/wwwroot /home/site/nexus
-cd /home/site
-export PYTHONPATH=/home/site:$PYTHONPATH
+PROJECT_ID=${1:-$(gcloud config get-value project 2>/dev/null)}
+REGION=${2:-"asia-east1"}
+SERVICE_NAME="nexus-ai"
 
-gunicorn --bind=0.0.0.0:8000 --timeout 600 --worker-class uvicorn.workers.UvicornWorker nexus.main:app
+if [ -z "$PROJECT_ID" ]; then
+  echo "Usage: ./startup.sh [project-id] [region]"
+  echo "  or:  gcloud config set project YOUR_PROJECT_ID"
+  exit 1
+fi
+
+echo "Deploying $SERVICE_NAME to Cloud Run..."
+echo "  Project: $PROJECT_ID"
+echo "  Region:  $REGION"
+
+gcloud run deploy "$SERVICE_NAME" \
+  --source . \
+  --region "$REGION" \
+  --allow-unauthenticated \
+  --memory 1Gi \
+  --timeout 300 \
+  --set-env-vars "GEMINI_API_KEY=${GEMINI_API_KEY}" \
+  --project "$PROJECT_ID"
+
+echo ""
+echo "Done! Visit the Cloud Run URL above to access Nexus AI."

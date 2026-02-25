@@ -21,12 +21,13 @@ RUN mkdir -p /workspace/nexus/data
 # PYTHONPATH so 'import nexus' works
 ENV PYTHONPATH=/workspace
 
-# Expose port
-EXPOSE 8000
+# Google Cloud Run injects PORT (default 8080); fall back to 8080 locally
+ENV PORT=8080
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s \
-    CMD python -c "import httpx; httpx.get('http://localhost:8000/')" || exit 1
+    CMD python -c "import httpx; httpx.get(f'http://localhost:{__import__(\"os\").environ.get(\"PORT\",\"8080\")}/')" || exit 1
 
-# Run via uvicorn
-CMD ["python", "-m", "uvicorn", "nexus.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run via uvicorn — Cloud Run sets $PORT automatically
+CMD ["sh", "-c", "python -m uvicorn nexus.main:app --host 0.0.0.0 --port ${PORT:-8080}"]

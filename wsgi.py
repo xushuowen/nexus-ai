@@ -1,25 +1,13 @@
-"""WSGI entry point for Azure App Service deployment.
+"""Production entry point for Google Cloud Run.
 
-When deployed via 'az webapp up', files land in /home/site/wwwroot/
-but imports expect a 'nexus' package. This module fixes the path.
+Google Cloud Run builds from the Dockerfile and starts the container via:
+    CMD ["python", "-m", "uvicorn", "nexus.main:app", "--host", "0.0.0.0", "--port", "8080"]
+
+This module is provided as an alternative entry point for gunicorn-based deployments:
+    gunicorn --bind 0.0.0.0:$PORT --worker-class uvicorn.workers.UvicornWorker wsgi:app
+
+Cloud Run automatically injects the PORT environment variable (default: 8080).
 """
-import os
-import sys
+from nexus.main import app  # noqa: F401
 
-# Make the parent of wwwroot available so 'from nexus import ...' works
-# by creating a symlink: /home/site/nexus -> /home/site/wwwroot
-site_dir = os.path.dirname(os.path.abspath(__file__))  # /home/site/wwwroot
-parent_dir = os.path.dirname(site_dir)                  # /home/site
-
-nexus_link = os.path.join(parent_dir, "nexus")
-if not os.path.exists(nexus_link):
-    try:
-        os.symlink(site_dir, nexus_link)
-    except OSError:
-        pass
-
-# Add parent to sys.path so Python can find 'nexus' package
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
-
-from nexus.main import app  # noqa: E402
+__all__ = ["app"]
