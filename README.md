@@ -23,6 +23,10 @@
 
 > ▶ **[Watch Demo (< 4 min)](https://youtu.be/TODO)** — Anatomy image analysis · PubMed search · Real-time agent reasoning · Multimodal output
 
+## 🌐 Live Demo
+
+> 🚀 **[nexus-ai-758633716956.asia-east1.run.app](https://nexus-ai-758633716956.asia-east1.run.app)** — Deployed on Google Cloud Run
+
 ---
 
 ## Beyond the Text Box
@@ -228,12 +232,15 @@ Executes automatically and sends Telegram push notifications.
 
 ## Google Cloud Deployment
 
+**Live:** [https://nexus-ai-758633716956.asia-east1.run.app](https://nexus-ai-758633716956.asia-east1.run.app)
+
 ```bash
 # Build and deploy to Cloud Run
 gcloud run deploy nexus-ai \
   --source . \
   --region asia-east1 \
   --allow-unauthenticated \
+  --memory 1Gi \
   --set-env-vars GEMINI_API_KEY=your_key
 ```
 
