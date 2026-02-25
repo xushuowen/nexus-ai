@@ -27,7 +27,7 @@ EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s \
-    CMD python -c "import httpx; httpx.get(f'http://localhost:{__import__(\"os\").environ.get(\"PORT\",\"8080\")}/')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/')" || exit 1
 
 # Run via uvicorn — Cloud Run sets $PORT automatically
 CMD ["sh", "-c", "python -m uvicorn nexus.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
