@@ -33,8 +33,9 @@ DEPLOY_CMD=(
 )
 
 # Only pass GEMINI_API_KEY if set in environment
+# Also set GOOGLE_API_KEY (same value) for Google ADK compatibility
 if [ -n "$GEMINI_API_KEY" ]; then
-  DEPLOY_CMD+=(--update-env-vars "GEMINI_API_KEY=${GEMINI_API_KEY}")
+  DEPLOY_CMD+=(--update-env-vars "GEMINI_API_KEY=${GEMINI_API_KEY},GOOGLE_API_KEY=${GEMINI_API_KEY}")
   echo "  Using GEMINI_API_KEY from environment"
 else
   echo "  GEMINI_API_KEY not set — keeping existing Cloud Run value"
