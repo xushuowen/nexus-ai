@@ -375,7 +375,7 @@ nexus/
 **Gemini Live Agent Challenge 2026**
 Track: **Live Agents** · Google Agent Development Kit (ADK)
 
-Nexus AI demonstrates production-grade multi-agent orchestration powered by **Gemini 2.0 Flash**, **Google GenAI SDK**, and **Google ADK**. It goes beyond the text box with real-time multimodal vision (anatomy diagrams → structured clinical descriptions), 9 specialist agents, 22 skills, a 4-layer memory system, and a standalone ADK agent — all built for real daily use.
+Nexus AI demonstrates production-grade multi-agent orchestration powered by **Gemini 2.0 Flash**, **Google GenAI SDK**, and **Google ADK**. It goes beyond the text box with real-time multimodal vision (anatomy diagrams → structured clinical descriptions), 9 specialist agents, 23 skills, a 4-layer memory system, and a standalone ADK agent — all built for real daily use.
 
 [🔗 geminiliveagentchallenge.devpost.com](https://geminiliveagentchallenge.devpost.com)
 
