@@ -334,7 +334,7 @@ class Orchestrator:
             return AgentResult(content=titan.reply, confidence=0.8, source_agent="chat")
         except Exception as e:
             logger.error(f"Chat path error: {e}", exc_info=True)
-            return AgentResult(content=f"抱歉，處理時發生錯誤: {e}", confidence=0.0, source_agent="error")
+            return AgentResult(content="⚠️ 處理時發生錯誤，請稍後再試。", confidence=0.0, source_agent="error")
 
     async def _specialist_path(
         self, user_input: str, agent_name: str, history: list[dict],
