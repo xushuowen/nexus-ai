@@ -77,10 +77,26 @@ class WeatherSkill(BaseSkill):
                 geo_resp.raise_for_status()
                 geo = geo_resp.json().get("results", [])
                 if not geo:
-                    return SkillResult(
-                        content=f"找不到城市「{city}」，請確認拼寫（例如：Taipei、Tokyo、London）",
-                        success=False, source=self.name,
+                    # Fallback: Nominatim supports Chinese city names
+                    nom_resp = await client.get(
+                        "https://nominatim.openstreetmap.org/search",
+                        params={"q": city, "format": "json", "limit": 1},
+                        headers={"User-Agent": "NexusAI/1.0"},
                     )
+                    nom = nom_resp.json()
+                    if nom:
+                        lat = float(nom[0]["lat"])
+                        lon = float(nom[0]["lon"])
+                        city_name = nom[0].get("display_name", city).split(",")[0]
+                        country = ""
+                        admin = ""
+                        # Jump directly to weather fetch
+                        geo = [{"latitude": lat, "longitude": lon, "name": city_name, "country": "", "admin1": ""}]
+                    else:
+                        return SkillResult(
+                            content=f"找不到城市「{city}」，請確認城市名稱（例如：台北、苗栗、Tokyo、London）",
+                            success=False, source=self.name,
+                        )
 
                 loc = geo[0]
                 lat = loc["latitude"]
