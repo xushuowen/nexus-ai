@@ -51,7 +51,7 @@ class ImageAnalysisTool(BaseTool):
         try:
             import litellm
             response = await litellm.acompletion(
-                model="gemini/gemini-2.0-flash-exp",
+                model="gemini/gemini-2.0-flash",
                 messages=[{
                     "role": "user",
                     "content": [

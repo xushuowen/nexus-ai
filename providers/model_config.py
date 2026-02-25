@@ -52,7 +52,7 @@ class ModelRouter:
     def _get_fallback(self) -> ModelSpec:
         """Last resort fallback."""
         return ModelSpec(
-            model_id="gemini/gemini-2.0-flash-exp",
+            model_id="gemini/gemini-2.0-flash",
             max_tokens=2000,
             temperature=0.7,
             use_for=["general"],

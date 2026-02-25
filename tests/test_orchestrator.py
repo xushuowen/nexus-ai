@@ -23,7 +23,7 @@ def mock_config():
             "fallback": "gemini-pro",
             "models": {
                 "gemini-flash": {
-                    "model_id": "gemini/gemini-2.0-flash-exp",
+                    "model_id": "gemini/gemini-2.0-flash",
                     "max_tokens": 500,
                     "temperature": 0.7,
                     "use_for": ["routing", "simple_tasks"],
