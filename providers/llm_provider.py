@@ -268,17 +268,24 @@ class LLMProvider:
             )
 
         try:
-            response = await litellm.acompletion(
-                model=spec.model_id,
-                messages=messages,
-                max_tokens=mt,
-                temperature=temperature if temperature is not None else spec.temperature,
-                timeout=60,
-                **self._extra_kwargs(spec),
-            )
-            content = response.choices[0].message.content or ""
-            usage = response.usage
-            total_tokens = (usage.total_tokens if usage else tokens_est + self._count_tokens(content))
+            if self._is_gemini(spec):
+                content = await self._gemini_complete(
+                    spec=spec,
+                    messages=messages,
+                    max_tokens=mt,
+                    temperature=temperature if temperature is not None else spec.temperature,
+                )
+            else:
+                response = await litellm.acompletion(
+                    model=spec.model_id,
+                    messages=messages,
+                    max_tokens=mt,
+                    temperature=temperature if temperature is not None else spec.temperature,
+                    timeout=60,
+                    **self._extra_kwargs(spec),
+                )
+                content = response.choices[0].message.content or ""
+            total_tokens = tokens_est + self._count_tokens(content)
             await self.budget.consume_tokens(total_tokens, source=source, metadata={
                 "model": spec.model_id,
                 "task_type": task_type,
