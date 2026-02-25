@@ -347,7 +347,9 @@ async def websocket_endpoint(ws: WebSocket):
                 logger.error(f"Processing error: {e}")
                 await ws.send_text(json.dumps({
                     "type": "error",
-                    "content": str(e),
+                    "stream": "analysis",
+                    "content": "⚠️ 處理時發生錯誤，請稍後再試。",
+                    "metadata": {},
                 }))
 
     except WebSocketDisconnect:

@@ -174,11 +174,20 @@ class LLMProvider:
         except Exception as e:
             logger.error(f"LLM call failed ({spec.model_id}): {e}")
             # Try fallback model (max one retry to prevent infinite recursion)
-            if _depth < 1 and spec.model_id != self.router.get_fallback().model_id:
+            fallback = self.router.get_fallback()
+            if _depth < 1 and spec.model_id != fallback.model_id:
+                # Skip fallback if it requires an API key that isn't set
+                fallback_key_env = {
+                    "groq": "GROQ_API_KEY",
+                    "openai": "OPENAI_API_KEY",
+                }.get(fallback.model_id.split("/")[0], "")
+                if fallback_key_env and not os.environ.get(fallback_key_env):
+                    logger.warning(f"Fallback model {fallback.model_id} skipped — {fallback_key_env} not set")
+                    raise RuntimeError(f"AI 服務暫時無法使用，請稍後再試。(primary={spec.model_id})") from e
                 logger.info("Trying fallback model...")
                 return await self.complete(
                     prompt=prompt,
-                    model_spec=self.router.get_fallback(),
+                    model_spec=fallback,
                     source=source,
                     temperature=temperature,
                     max_tokens=max_tokens,

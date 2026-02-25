@@ -26,6 +26,7 @@ gcloud run deploy "$SERVICE_NAME" \
   --allow-unauthenticated \
   --memory 1Gi \
   --timeout 300 \
+  --min-instances 1 \
   --set-env-vars "GEMINI_API_KEY=${GEMINI_API_KEY}" \
   --project "$PROJECT_ID"
 

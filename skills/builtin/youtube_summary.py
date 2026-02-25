@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from nexus.skills.skill_base import BaseSkill, SkillResult
 
@@ -98,7 +101,11 @@ class YouTubeSummarySkill(BaseSkill):
                 languages=["zh-TW", "zh", "en"],
             )
             return " ".join(entry["text"] for entry in transcript)
-        except Exception:
+        except ImportError:
+            logger.warning("youtube_transcript_api not installed — transcript unavailable")
+            return ""
+        except Exception as e:
+            logger.debug(f"Transcript unavailable for {video_id}: {e}")
             return ""
 
     async def _get_video_info(self, url: str) -> dict[str, str]:
@@ -121,6 +128,9 @@ class YouTubeSummarySkill(BaseSkill):
             if desc_match:
                 info["description"] = desc_match.group(1)
 
+            if not info:
+                logger.warning(f"Could not extract any info from YouTube page: {url}")
             return info
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to fetch YouTube page info: {e}")
             return {}
