@@ -99,6 +99,11 @@ All calls go through **Google GenAI SDK** (`google-generativeai`), with Groq Lla
 
 ## System Architecture
 
+![Nexus AI Architecture](docs/screenshots/architecture.png)
+
+<details>
+<summary>Text diagram</summary>
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      INTERFACES                              │
@@ -150,6 +155,8 @@ All calls go through **Google GenAI SDK** (`google-generativeai`), with Groq Lla
 │  Google Cloud Run (production) · Local uvicorn (dev)        │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ---
 
