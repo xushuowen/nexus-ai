@@ -32,7 +32,7 @@ class TelegramChannel:
         self._allowed_users: set[int] = set()
         owner_id = os.getenv("TELEGRAM_CHAT_ID", "").strip().lstrip("-")
         if owner_id.isdigit():
-            self._allowed_users.add(int(os.getenv("TELEGRAM_CHAT_ID", "").strip()))
+            self._allowed_users.add(int(owner_id))
         extra = os.getenv("TELEGRAM_ALLOWED_USERS", "").strip()
         if extra:
             for uid in extra.split(","):
