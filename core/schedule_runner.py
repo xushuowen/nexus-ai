@@ -35,9 +35,9 @@ class ScheduleRunner:
             except Exception as e:
                 logger.error(f"ScheduleRunner loop error: {e}")
 
-            # Sleep until the top of the next minute
+            # Sleep until the top of the next minute (max 60s, min 1s)
             now = datetime.now()
-            sleep_secs = 60 - now.second + 1
+            sleep_secs = max(1, 60 - now.second)
             await asyncio.sleep(sleep_secs)
 
     async def _check_all(self) -> None:

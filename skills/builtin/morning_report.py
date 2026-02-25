@@ -92,8 +92,11 @@ class MorningReportSkill(BaseSkill):
             cond   = _WMO.get(cur.get("weather_code", 0), "")
             precip = cur.get("precipitation", 0)
             result = f"{cond} **{temp}°C**（體感 {feels}°C）· 濕度 {humid}%"
-            if precip and float(precip) > 0:
-                result += f" · 降水 {precip}mm"
+            try:
+                if precip and float(precip) > 0:
+                    result += f" · 降水 {precip}mm"
+            except (TypeError, ValueError):
+                pass
             return result
         except Exception as e:
             return f"⚠️ 天氣取得失敗: {e}"
