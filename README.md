@@ -11,6 +11,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Gemini 2.0 Flash](https://img.shields.io/badge/Gemini-2.0%20Flash-4285f4?style=flat-square&logo=google&logoColor=white)](https://ai.google.dev)
 [![Google GenAI SDK](https://img.shields.io/badge/Google-GenAI%20SDK-34a853?style=flat-square&logo=google&logoColor=white)](https://ai.google.dev/gemini-api/docs)
+[![Google ADK](https://img.shields.io/badge/Google-ADK-4285f4?style=flat-square&logo=google&logoColor=white)](https://google.github.io/adk-docs/)
 [![Google Cloud Run](https://img.shields.io/badge/Google%20Cloud-Run-4285f4?style=flat-square&logo=googlecloud&logoColor=white)](https://cloud.google.com/run)
 [![License: MIT](https://img.shields.io/badge/License-MIT-ffd700?style=flat-square)](LICENSE)
 [![Gemini Live Agent Challenge](https://img.shields.io/badge/Gemini-Live%20Agent%20Challenge%202026-4285f4?style=flat-square&logo=google)](https://geminiliveagentchallenge.devpost.com)
@@ -221,11 +222,12 @@ Executes automatically and sends Telegram push notifications.
 | Layer | Technology |
 |-------|-----------|
 | LLM | **Gemini 2.0 Flash** (Google GenAI SDK) · Groq Llama 3.3 70B fallback |
+| Agent Framework | **Google ADK** (Agent Development Kit) — standalone agent entry point |
 | Backend | Python 3.11 · FastAPI · asyncio |
 | Memory | SQLite FTS5 · ChromaDB · NetworkX |
 | Frontend | Vanilla JS · WebSocket · D3.js v7 · Orbitron/Rajdhani fonts |
 | Bot | python-telegram-bot |
-| Deployment | **Google Cloud Run** |
+| Deployment | **Google Cloud Run** (min-instances=1, max-instances=1) |
 | Security | Custom SSRF filter · Rate limiter · Token budget controller |
 
 ---
@@ -235,13 +237,18 @@ Executes automatically and sends Telegram push notifications.
 **Live:** [https://nexus-ai-758633716956.asia-east1.run.app](https://nexus-ai-758633716956.asia-east1.run.app)
 
 ```bash
-# Build and deploy to Cloud Run
+# Build and deploy to Cloud Run (recommended)
+./startup.sh
+
+# Or manually:
 gcloud run deploy nexus-ai \
   --source . \
   --region asia-east1 \
   --allow-unauthenticated \
   --memory 1Gi \
-  --set-env-vars GEMINI_API_KEY=your_key
+  --min-instances 1 \
+  --max-instances 1 \
+  --update-env-vars GEMINI_API_KEY=your_key
 ```
 
 Or use the included `Dockerfile` for local container builds.
@@ -303,6 +310,9 @@ All text tests work with only `GEMINI_API_KEY`. Test #8 requires `TELEGRAM_BOT_T
 ## Project Structure
 
 ```
+adk_agent/                     # Google ADK standalone agent ★
+├── agent.py                   # root_agent with web/PubMed/calc/weather tools
+└── __init__.py
 nexus/
 ├── main.py                    # FastAPI entry point, WebSocket, lifespan
 ├── config.yaml                # Model routing, budget, memory config
@@ -358,9 +368,9 @@ nexus/
 <div align="center">
 
 **Gemini Live Agent Challenge 2026**
-Track: **Creative Storytellers** · Multimodal AI
+Track: **Live Agents** · Google Agent Development Kit (ADK)
 
-Nexus AI demonstrates production-grade multi-agent orchestration powered entirely by **Gemini 2.0 Flash** and **Google GenAI SDK**. It goes beyond the text box with real-time multimodal vision (anatomy diagrams → structured clinical descriptions), 9 specialist agents, 22 skills, and a 4-layer memory system built for real daily use.
+Nexus AI demonstrates production-grade multi-agent orchestration powered by **Gemini 2.0 Flash**, **Google GenAI SDK**, and **Google ADK**. It goes beyond the text box with real-time multimodal vision (anatomy diagrams → structured clinical descriptions), 9 specialist agents, 22 skills, a 4-layer memory system, and a standalone ADK agent — all built for real daily use.
 
 [🔗 geminiliveagentchallenge.devpost.com](https://geminiliveagentchallenge.devpost.com)
 
