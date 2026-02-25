@@ -92,6 +92,13 @@ class AcademicSearchSkill(BaseSkill):
         r"(物理治療|復健|PT).{0,10}(研究|論文|實證|evidence)",
     ]
 
+    # Only these trigger words get stripped from the query (not medical terms)
+    _STRIP_TRIGGERS = [
+        "論文", "paper", "期刊", "journal", "pubmed", "文獻", "學術", "academic",
+        "physical therapy", "物理治療", "文獻搜尋", "semantic scholar", "openalex",
+        "找文獻", "找論文", "查論文", "查文獻", "搜論文",
+    ]
+
     # Filler words to strip from query before searching
     _FILLER = ["查有關", "查一下", "找一下", "幫我找", "幫我查", "相關的", "相關",
                "有哪些", "有沒有", "的論文", "的期刊", "的研究", "的文獻",
@@ -113,8 +120,8 @@ class AcademicSearchSkill(BaseSkill):
         ):
             return await self._save_to_notes(raw_query, session_id, context)
 
-        # Clean query — remove triggers and filler words
-        for t in self.triggers:
+        # Clean query — remove routing triggers and filler words (medical terms kept)
+        for t in self._STRIP_TRIGGERS:
             query = re.sub(re.escape(t), " ", query, flags=re.IGNORECASE)
         for f in self._FILLER:
             query = query.replace(f, " ")
