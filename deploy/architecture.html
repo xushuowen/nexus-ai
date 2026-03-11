@@ -4,110 +4,162 @@
 <meta charset="UTF-8">
 <title>Nexus AI — Architecture Diagram</title>
 <style>
+  * { box-sizing: border-box; }
   body {
-    background: #0a0e1a;
+    background: #070b16;
     color: #00d4ff;
     font-family: 'Courier New', monospace;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
     min-height: 100vh;
     margin: 0;
-    padding: 20px;
-    box-sizing: border-box;
+    padding: 30px 16px 40px;
   }
   h1 {
     color: #00d4ff;
-    font-size: 22px;
-    margin-bottom: 6px;
-    letter-spacing: 2px;
+    font-size: 24px;
+    margin: 0 0 4px;
+    letter-spacing: 3px;
     text-transform: uppercase;
   }
   .subtitle {
     color: #4a9eff;
     font-size: 13px;
-    margin-bottom: 30px;
+    margin-bottom: 8px;
     letter-spacing: 1px;
   }
+  .tagline {
+    color: #a855f7;
+    font-size: 12px;
+    margin-bottom: 32px;
+    letter-spacing: 1px;
+  }
+
+  /* ── Main diagram container ── */
   .diagram {
-    background: #0d1225;
+    background: #0a0f1e;
     border: 1px solid #1a3a5c;
-    border-radius: 8px;
-    padding: 30px 40px;
-    max-width: 720px;
+    border-radius: 10px;
+    padding: 30px 36px;
+    max-width: 760px;
     width: 100%;
   }
+
+  /* ── Generic box ── */
   .box {
     border: 1px solid #1e4a7a;
-    border-radius: 4px;
+    border-radius: 5px;
     padding: 10px 16px;
     margin: 6px 0;
-    position: relative;
   }
-  .box.interfaces  { border-color: #00d4ff; background: #071828; }
-  .box.budget      { border-color: #4a9eff; background: #071828; }
-  .box.orch        { border-color: #00d4ff; background: #071828; }
-  .box.agents      { border-color: #3a7fd4; background: #071828; }
-  .box.skills      { border-color: #3a7fd4; background: #071828; }
-  .box.memory      { border-color: #4a9eff; background: #071828; }
-  .box.llm         { border-color: #00ff88; background: #071828; }
-
   .box-title {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: bold;
     letter-spacing: 1.5px;
     text-transform: uppercase;
-    margin-bottom: 4px;
+    margin-bottom: 5px;
   }
-  .interfaces .box-title { color: #00d4ff; }
-  .budget .box-title     { color: #4a9eff; }
-  .orch .box-title       { color: #00d4ff; }
-  .agents .box-title     { color: #7ab8ff; }
-  .skills .box-title     { color: #7ab8ff; }
-  .memory .box-title     { color: #4a9eff; }
-  .llm .box-title        { color: #00ff88; }
-
   .box-content {
     font-size: 12px;
     color: #8ab4d4;
-    line-height: 1.6;
+    line-height: 1.7;
   }
-  .llm .box-content { color: #80ffb8; }
 
+  /* ── Colour variants ── */
+  .box.interfaces { border-color: #00d4ff; background: #04111e; }
+  .box.interfaces .box-title { color: #00d4ff; }
+
+  .box.voice { border-color: #a855f7; background: #0d0a1e; }
+  .box.voice .box-title { color: #c084fc; }
+  .box.voice .box-content { color: #c084fc; }
+
+  .box.adk { border-color: #f59e0b; background: #0f0c04; }
+  .box.adk .box-title { color: #fbbf24; }
+  .box.adk .box-content { color: #fde68a; }
+
+  .box.budget { border-color: #4a9eff; background: #04111e; }
+  .box.budget .box-title { color: #4a9eff; }
+
+  .box.orch { border-color: #00d4ff; background: #04111e; }
+  .box.orch .box-title { color: #00d4ff; }
+
+  .box.agents { border-color: #3a7fd4; background: #04111e; }
+  .box.agents .box-title { color: #7ab8ff; }
+
+  .box.skills { border-color: #3a7fd4; background: #04111e; }
+  .box.skills .box-title { color: #7ab8ff; }
+
+  .box.memory { border-color: #06b6d4; background: #04111e; }
+  .box.memory .box-title { color: #22d3ee; }
+
+  .box.pyramid { border-color: #0891b2; background: #04111e; }
+  .box.pyramid .box-title { color: #67e8f9; }
+
+  .box.llm { border-color: #00ff88; background: #04110a; }
+  .box.llm .box-title { color: #00ff88; }
+  .box.llm .box-content { color: #80ffb8; }
+
+  /* ── Badge ── */
+  .badge {
+    display: inline-block;
+    background: #091828;
+    border: 1px solid #1e4a7a;
+    border-radius: 3px;
+    padding: 1px 7px;
+    font-size: 11px;
+    color: #4a9eff;
+    margin: 2px 3px 2px 0;
+  }
+  .badge.cyan   { border-color: #00d4ff; color: #00d4ff; }
+  .badge.green  { border-color: #00ff88; color: #00ff88; background: #021a09; }
+  .badge.purple { border-color: rgba(168,85,247,.5); color: #c084fc; background: rgba(168,85,247,.08); }
+  .badge.amber  { border-color: rgba(245,158,11,.5); color: #fbbf24; background: rgba(245,158,11,.06); }
+  .badge.teal   { border-color: #06b6d4; color: #22d3ee; background: #021418; }
+
+  /* ── Arrows and connectors ── */
   .arrow {
     text-align: center;
     color: #1e4a7a;
-    font-size: 16px;
+    font-size: 15px;
     margin: 2px 0;
-    line-height: 1;
+    line-height: 1.2;
+    user-select: none;
   }
+
+  /* ── Row layout for agents + skills ── */
   .row {
     display: flex;
     gap: 12px;
     margin: 6px 0;
   }
-  .row .box {
-    flex: 1;
-    margin: 0;
+  .row .box { flex: 1; margin: 0; }
+
+  /* ── Memory layers (3-col) ── */
+  .mem-row {
+    display: flex;
+    gap: 8px;
+    margin: 6px 0;
   }
-  .badge {
-    display: inline-block;
-    background: #0a2040;
-    border: 1px solid #1e4a7a;
-    border-radius: 3px;
-    padding: 1px 6px;
-    font-size: 11px;
-    color: #4a9eff;
-    margin: 2px 3px 2px 0;
-  }
-  .badge.green { border-color: #00ff88; color: #00ff88; }
+  .mem-row .box { flex: 1; margin: 0; padding: 8px 12px; }
+
+  /* ── Footer ── */
   .footer {
-    margin-top: 20px;
+    margin-top: 22px;
     font-size: 11px;
     color: #2a4a6a;
     text-align: center;
     letter-spacing: 1px;
+  }
+  .footer a { color: #3a6a9a; text-decoration: none; }
+  .footer a:hover { color: #4a9eff; }
+
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: #2a4a6a;
+    text-transform: uppercase;
+    margin: 10px 0 2px;
   }
 </style>
 </head>
@@ -115,104 +167,152 @@
 
 <h1>⬡ Nexus AI</h1>
 <div class="subtitle">Personal Multi-Agent Intelligence System — Architecture</div>
+<div class="tagline">Gemini Live Agent Challenge 2026 &nbsp;·&nbsp; Live Agents Track</div>
 
 <div class="diagram">
 
-  <!-- Interfaces -->
+  <!-- ── Layer 1: Interfaces ── -->
   <div class="box interfaces">
     <div class="box-title">Interfaces</div>
     <div class="box-content">
-      <span class="badge">Web UI (WebSocket)</span>
-      <span class="badge">🎤 Voice UI (Gemini Live API)</span>
+      <span class="badge cyan">🎤 Voice UI (Gemini Live)</span>
+      <span class="badge cyan">Web Chat (WebSocket)</span>
       <span class="badge">Telegram Bot</span>
-      <span class="badge">REST API</span>
+      <span class="badge">REST API /api/*</span>
+      <span class="badge">Dashboard /dashboard</span>
     </div>
   </div>
 
   <div class="arrow">│</div>
 
-  <!-- Voice Layer -->
-  <div class="box" style="border-color:#a855f7;background:#0d0a1e;">
-    <div class="box-title" style="color:#a855f7;">Gemini Live API — Real-Time Voice Layer</div>
-    <div class="box-content" style="color:#c084fc;">
-      Browser Mic → 16kHz PCM → WebSocket /ws/voice<br>
-      Gemini Live bidirectional streaming → 24kHz audio output<br>
-      <span class="badge" style="background:rgba(168,85,247,0.15);border-color:rgba(168,85,247,0.4);color:#c084fc;">gemini-2.0-flash-live-001</span>
-      <span class="badge" style="background:rgba(168,85,247,0.15);border-color:rgba(168,85,247,0.4);color:#c084fc;">ADK Agent</span>
-      <span class="badge" style="background:rgba(168,85,247,0.15);border-color:rgba(168,85,247,0.4);color:#c084fc;">Function Calling</span>
+  <!-- ── Layer 2a: Gemini Live API (Voice) ── -->
+  <div class="box voice">
+    <div class="box-title">🔴 Gemini Live API — Real-Time Voice Layer</div>
+    <div class="box-content">
+      Browser Mic → 16kHz PCM → WebSocket <code>/ws/voice</code> → Gemini Live bidirectional stream → 24kHz audio playback<br>
+      Input transcription &nbsp;·&nbsp; Output audio transcription &nbsp;·&nbsp; Live function calling<br>
+      <span class="badge purple">gemini-2.5-flash-native-audio-latest</span>
+      <span class="badge purple">response_modalities: AUDIO</span>
+      <span class="badge purple">AudioTranscriptionConfig</span>
     </div>
   </div>
 
   <div class="arrow">│</div>
 
-  <!-- Budget -->
+  <!-- ── Layer 2b: ADK Agent ── -->
+  <div class="box adk">
+    <div class="box-title">⚡ Google ADK Agent — Text / API Interface</div>
+    <div class="box-content">
+      Standalone ADK agent (`adk web` / `adk run`) with 4 tools: search_web · search_medical_papers · compute · get_weather<br>
+      <span class="badge amber">google-adk ≥ 1.26</span>
+      <span class="badge amber">gemini-2.5-flash</span>
+      <span class="badge amber">adk_agent/agent.py</span>
+    </div>
+  </div>
+
+  <div class="arrow">│</div>
+
+  <!-- ── Layer 3: Token Budget ── -->
   <div class="box budget">
     <div class="box-title">Token Budget Controller</div>
-    <div class="box-content">Daily 50k token limit &nbsp;·&nbsp; Auto-reset at midnight &nbsp;·&nbsp; Hard stop enforcement</div>
+    <div class="box-content">
+      Daily 50 k token limit &nbsp;·&nbsp; Auto-reset at midnight &nbsp;·&nbsp; Hard-stop enforcement &nbsp;·&nbsp; Per-session tracking
+    </div>
   </div>
 
   <div class="arrow">│</div>
 
-  <!-- Orchestrator -->
+  <!-- ── Layer 4: Orchestrator ── -->
   <div class="box orch">
-    <div class="box-title">Orchestrator</div>
-    <div class="box-content">Intent detection &nbsp;→&nbsp; Agent routing &nbsp;→&nbsp; Memory recall &nbsp;→&nbsp; Response synthesis</div>
+    <div class="box-title">Orchestrator — TitanProtocol</div>
+    <div class="box-content">
+      Intent detection &nbsp;→&nbsp; SPECIALIST_TRIGGERS routing &nbsp;→&nbsp; Memory recall &nbsp;→&nbsp; MEMORY / ACTION / REPLY synthesis<br>
+      HybridMemory context injection &nbsp;·&nbsp; Long-term pyramid context
+    </div>
   </div>
 
-  <div class="arrow">├───────────────────────────────┤</div>
+  <div class="arrow">├────────────────────────────────────┤</div>
 
-  <!-- Agents + Skills -->
+  <!-- ── Layer 5: Agents + Skills (side by side) ── -->
   <div class="row">
     <div class="box agents">
       <div class="box-title">Specialist Agents (9)</div>
       <div class="box-content">
-        Reasoning &nbsp;·&nbsp; Coder<br>
-        Research &nbsp;·&nbsp; Knowledge<br>
-        Vision &nbsp;·&nbsp; File<br>
-        Web &nbsp;·&nbsp; Shell<br>
-        Optimizer
+        ReasoningAgent &nbsp;·&nbsp; CoderAgent<br>
+        ResearchAgent &nbsp;·&nbsp; KnowledgeAgent<br>
+        VisionAgent &nbsp;·&nbsp; FileAgent<br>
+        WebAgent &nbsp;·&nbsp; ShellAgent<br>
+        OptimizerAgent
       </div>
     </div>
     <div class="box skills">
-      <div class="box-title">Skill Engine (19)</div>
+      <div class="box-title">Skill Engine (24)</div>
       <div class="box-content">
         weather &nbsp;·&nbsp; translator<br>
         github &nbsp;·&nbsp; web_search<br>
-        news &nbsp;·&nbsp; diary<br>
-        reminder &nbsp;·&nbsp; pdf<br>
-        image_gen &nbsp;·&nbsp; more…
+        news &nbsp;·&nbsp; diary &nbsp;·&nbsp; reminder<br>
+        pdf &nbsp;·&nbsp; image_gen<br>
+        pubmed &nbsp;·&nbsp; calculator<br>
+        schedule &nbsp;·&nbsp; more…
       </div>
     </div>
   </div>
 
   <div class="arrow">│</div>
 
-  <!-- Memory -->
+  <!-- ── Layer 6: 5-Layer Memory ── -->
   <div class="box memory">
-    <div class="box-title">4-Layer Memory System</div>
-    <div class="box-content">
-      <span class="badge">Working Memory (7 slots)</span>
-      <span class="badge">Episodic (SQLite)</span>
-      <span class="badge">Semantic (ChromaDB)</span>
-      <span class="badge">Procedural Cache</span>
+    <div class="box-title">HybridMemory — 5-Layer Architecture</div>
+    <div class="box-content" style="margin-bottom:8px;">
+      <span class="badge teal">Working (7 slots)</span>
+      <span class="badge teal">Episodic (SQLite FTS5)</span>
+      <span class="badge teal">Semantic (ChromaDB)</span>
+      <span class="badge teal">Procedural Cache</span>
+      <span class="badge teal">PyramidMemory ▼</span>
+    </div>
+  </div>
+
+  <!-- PyramidMemory sub-layer -->
+  <div class="mem-row">
+    <div class="box pyramid">
+      <div class="box-title" style="font-size:10px;">Tier 1</div>
+      <div class="box-content" style="font-size:11px;">Daily<br>summaries</div>
+    </div>
+    <div class="box pyramid">
+      <div class="box-title" style="font-size:10px;">Tier 2</div>
+      <div class="box-content" style="font-size:11px;">Monthly<br>synthesis</div>
+    </div>
+    <div class="box pyramid">
+      <div class="box-title" style="font-size:10px;">Tier 3</div>
+      <div class="box-content" style="font-size:11px;">Yearly<br>distillation</div>
+    </div>
+    <div class="box pyramid">
+      <div class="box-title" style="font-size:10px;">Tier 4</div>
+      <div class="box-content" style="font-size:11px;">Decade<br>essence</div>
     </div>
   </div>
 
   <div class="arrow">│</div>
 
-  <!-- LLM -->
+  <!-- ── Layer 7: LLM Providers ── -->
   <div class="box llm">
-    <div class="box-title">LLM Provider — Google GenAI SDK + LiteLLM</div>
+    <div class="box-title">LLM Providers — Google GenAI SDK + LiteLLM</div>
     <div class="box-content">
-      <span class="badge green">Primary: Gemini 2.0 Flash (Google AI)</span>
-      <span class="badge green">Cloud: Vertex AI (Google Cloud)</span><br>
+      <span class="badge green">Primary: Gemini 2.5 Flash (google-genai)</span>
+      <span class="badge green">Live Voice: Gemini 2.5 Flash Native Audio</span><br>
+      <span class="badge green">ADK: Gemini 2.5 Flash (google-adk)</span>
       <span class="badge">Fallback: Groq Llama 3.3 70B</span>
     </div>
   </div>
 
 </div>
 
-<div class="footer">Built for Gemini Live Agent Challenge 2026 &nbsp;·&nbsp; github.com/xushuowen/nexus-ai</div>
+<div class="footer">
+  Gemini Live Agent Challenge 2026 &nbsp;·&nbsp;
+  <a href="https://github.com/xushuowen/nexus-ai">github.com/xushuowen/nexus-ai</a>
+  &nbsp;·&nbsp;
+  <a href="https://nexus-ai-nc4iieaq3q-de.a.run.app">Live Demo ↗</a>
+</div>
 
 </body>
 </html>
