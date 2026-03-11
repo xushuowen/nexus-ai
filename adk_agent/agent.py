@@ -180,7 +180,7 @@ def get_weather(city: str = "Taipei") -> dict:
 
 root_agent = Agent(
     name="nexus_ai",
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     description=(
         "Nexus AI — personal AI assistant for medical and physical therapy students. "
         "Supports web search, PubMed literature search, clinical calculations, and weather."

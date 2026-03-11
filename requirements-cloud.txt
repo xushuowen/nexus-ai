@@ -1,0 +1,50 @@
+# Nexus AI — Cloud Run dependencies (stripped of local-only heavy packages)
+# Core
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+gunicorn>=21.2.0
+python-dotenv>=1.0.0
+pyyaml>=6.0
+litellm>=1.0.0
+google-genai>=1.0.0
+google-adk>=1.0.0
+jinja2>=3.1.0
+httpx>=0.25.0
+
+# Memory (chromadb replaced by sqlite FTS on Cloud Run)
+networkx>=3.0
+
+# Web / scraping
+beautifulsoup4>=4.12.0
+
+# Telegram bot
+python-telegram-bot>=20.0
+
+# PDF parsing
+PyPDF2>=3.0.0
+
+# RSS feed parsing
+feedparser>=6.0.0
+
+# YouTube transcript
+youtube-transcript-api>=0.6.0
+
+# File upload + image
+python-multipart>=0.0.9
+Pillow>=10.0.0
+
+# Google Cloud
+google-cloud-storage>=2.10.0
+
+# Google Calendar
+google-api-python-client>=2.100.0
+google-auth-oauthlib>=1.1.0
+google-auth-httplib2>=0.2.0
+
+# Process management
+psutil>=5.9.0
+
+# Excluded from cloud:
+#   llama-cpp-python  (local LLM, not needed on Cloud Run)
+#   easyocr           (uses Gemini Vision instead)
+#   playwright        (browser control, not needed on Cloud Run)

@@ -6,12 +6,78 @@ import asyncio
 import json
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+
+def _ensure_single_instance() -> None:
+    """Ensure only one Nexus instance runs via PID file + psutil double-check."""
+    import tempfile
+    pid_file = Path(tempfile.gettempdir()) / "nexus_ai.pid"
+    current_pid = os.getpid()
+
+    # Step 1: PID file check (fast path)
+    if pid_file.exists():
+        try:
+            old_pid = int(pid_file.read_text().strip())
+            if old_pid != current_pid:
+                try:
+                    import psutil
+                    if psutil.pid_exists(old_pid):
+                        proc = psutil.Process(old_pid)
+                        proc.terminate()
+                        try:
+                            proc.wait(timeout=5)
+                        except psutil.TimeoutExpired:
+                            proc.kill()
+                        print(f"[Nexus] Stopped previous instance: PID {old_pid}")
+                except ImportError:
+                    pass
+        except (ValueError, OSError):
+            pass
+
+    # Step 2: psutil scan as backup (catches pythonw without PID file)
+    try:
+        import psutil
+        killed = []
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                if proc.pid == current_pid:
+                    continue
+                name = (proc.info['name'] or '').lower()
+                if 'python' not in name:
+                    continue
+                cmdline = ' '.join(proc.info['cmdline'] or [])
+                if 'nexus' in cmdline and 'main' in cmdline:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=5)
+                    except psutil.TimeoutExpired:
+                        proc.kill()
+                    killed.append(proc.pid)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+        if killed:
+            print(f"[Nexus] Stopped previous instance(s): PID {killed}")
+    except ImportError:
+        pass
+
+    # Step 3: Write current PID
+    try:
+        pid_file.write_text(str(current_pid))
+    except OSError:
+        pass
+
+
+try:
+    _ensure_single_instance()
+except ImportError:
+    pass  # psutil not available, skip
+
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, UploadFile, File
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -26,8 +92,10 @@ from nexus.memory.hybrid_store import HybridMemory
 from nexus.gateway.telegram_channel import TelegramChannel
 from nexus.gateway.hub import MessageHub
 from nexus.gateway.api_channel import init_api_channel, set_memory as _set_api_memory
-from nexus.security.auth import verify_request, verify_websocket, require_auth, get_api_key
+from nexus.gateway.voice_channel import router as _voice_router
+from nexus.security.auth import verify_request, verify_websocket, require_auth, get_api_key, get_user_token
 from nexus.security.rate_limiter import RateLimiter
+from nexus.security import token_vault as _tv
 from nexus.skills.skill_loader import SkillLoader
 from nexus.core.schedule_runner import ScheduleRunner
 
@@ -49,6 +117,7 @@ registry: AgentRegistry | None = None
 memory: HybridMemory | None = None
 telegram: TelegramChannel | None = None
 skill_loader: SkillLoader | None = None
+llm_provider: LLMProvider | None = None
 active_websockets: list[WebSocket] = []
 rate_limiter: RateLimiter | None = None
 _schedule_runner: ScheduleRunner | None = None
@@ -140,6 +209,15 @@ async def _deferred_init(llm, mem, orch, tg, bdg):
                 mm_skill.set_memory(mem)
                 logger.info("Injected memory into memory_manager skill")
 
+        # ── PyramidMemory (optional, controlled by config) ──
+        pyramid_cfg = config.load_config().get("pyramid_memory", {})
+        if pyramid_cfg.get("enabled", False):
+            try:
+                await mem.init_pyramid(mem.session, llm)
+                logger.info("PyramidMemory started")
+            except Exception as e:
+                logger.warning(f"PyramidMemory init failed (non-fatal): {e}")
+
         # Start Telegram bot
         tg.set_orchestrator(orch)
         tg.set_memory(mem)
@@ -169,6 +247,14 @@ async def _deferred_init(llm, mem, orch, tg, bdg):
             _init_event.set()
         logger.info("Background init: all systems operational!")
 
+        # Pre-warm EasyOCR model in background (avoid cold-start delay on first image)
+        try:
+            from nexus.agents.vision_agent import warmup_ocr
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, warmup_ocr)
+        except Exception as e:
+            logger.warning(f"EasyOCR warmup skipped: {e}")
+
         # 啟動循環排程執行器
         global _schedule_runner
         schedule_skill = next(
@@ -184,13 +270,21 @@ async def _deferred_init(llm, mem, orch, tg, bdg):
         # 晨報補送：開機後若是早上且今天尚未發送，自動補送
         await _morning_report_check(orch, tg)
 
+        # 主動任務掃描（背景循環，每小時檢查未完成事項）
+        try:
+            from nexus.core.notifications import proactive_check_loop
+            asyncio.create_task(proactive_check_loop(mem, llm, tg))
+            logger.info("Proactive task scanner started.")
+        except Exception as e:
+            logger.warning(f"Proactive scanner start failed (non-fatal): {e}")
+
     except Exception as e:
         logger.error(f"Background init failed: {e}", exc_info=True)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global budget, orchestrator, registry, memory, telegram, rate_limiter, skill_loader, _init_event
+    global budget, orchestrator, registry, memory, telegram, rate_limiter, skill_loader, llm_provider, _init_event
     _init_event = asyncio.Event()  # created here so event loop is already running
 
     logger.info("=" * 50)
@@ -206,6 +300,7 @@ async def lifespan(app: FastAPI):
     budget = BudgetController()
     router = ModelRouter()
     llm = LLMProvider(budget, router)
+    llm_provider = llm
     registry = AgentRegistry()
     memory = HybridMemory()
 
@@ -251,7 +346,8 @@ async def lifespan(app: FastAPI):
         for ws in active_websockets:
             try:
                 await ws.send_text(msg)
-            except Exception:
+            except Exception as _e:
+                logger.debug(f"WebSocket broadcast failed, removing: {_e}")
                 disconnected.append(ws)
         for ws in disconnected:
             active_websockets.remove(ws)
@@ -281,6 +377,8 @@ async def lifespan(app: FastAPI):
     if skill_loader:
         await skill_loader.shutdown_all()
     await registry.shutdown_all()
+    if llm_provider:
+        await llm_provider.close_browser()
     if memory:
         await memory.close()
 
@@ -289,11 +387,24 @@ app = FastAPI(title="Nexus AI", version="0.1.0", lifespan=lifespan)
 
 # Mount REST API channel (hub wired to orchestrator in lifespan)
 app.include_router(_api_v1_router)
+# Mount Voice channel (Gemini Live API WebSocket)
+app.include_router(_voice_router)
 
 # Mount static files
 web_dir = Path(__file__).parent / "web"
 app.mount("/static", StaticFiles(directory=str(web_dir / "static")), name="static")
 templates = Jinja2Templates(directory=str(web_dir / "templates"))
+
+
+@app.get("/sw.js")
+async def service_worker():
+    """Serve Service Worker from root scope (required for full PWA coverage)."""
+    sw_path = web_dir / "static" / "sw.js"
+    return Response(
+        content=sw_path.read_bytes(),
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/"},
+    )
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -334,9 +445,17 @@ async def websocket_endpoint(ws: WebSocket):
                 }))
                 continue
 
+            # Build extra_context for image if provided
+            image_path = msg.get("image_path", "")
+            extra_ctx = None
+            force_agent = None
+            if image_path and Path(image_path).exists():
+                extra_ctx = {"has_image": True, "image_path": image_path}
+                force_agent = "vision"
+
             # Process through orchestrator
             try:
-                async for event in orchestrator.process(user_input, session_id):
+                async for event in orchestrator.process(user_input, session_id, extra_context=extra_ctx, force_agent=force_agent):
                     await ws.send_text(json.dumps({
                         "type": event.event_type,
                         "stream": event.stream,
@@ -360,6 +479,10 @@ async def websocket_endpoint(ws: WebSocket):
 
 @app.get("/api/status")
 async def api_status():
+    brain = llm_provider.active_brain if llm_provider else "unknown"
+    brain_mode = llm_provider.router.brain_mode if llm_provider else "auto"
+    pyramid_cfg = config.load_config().get("pyramid_memory", {})
+    pyramid_enabled = pyramid_cfg.get("enabled", False)
     return {
         "status": "running",
         "init_complete": (_init_event is not None and _init_event.is_set()),
@@ -367,7 +490,150 @@ async def api_status():
         "agents": [a.name for a in registry.list_agents()] if registry else [],
         "skills": [s.name for s in skill_loader.list_skills()] if skill_loader else [],
         "telegram": telegram._running if telegram else False,
+        "brain": brain,
+        "brain_mode": brain_mode,
+        "pyramid_enabled": pyramid_enabled,
+        "auth0_configured": _tv.is_configured(),
     }
+
+
+# ── Auth0 / Token Vault routes ─────────────────────────────────────────────
+
+@app.get("/auth/login")
+async def auth_login():
+    """Redirect user to Auth0 Universal Login."""
+    from fastapi.responses import RedirectResponse
+    if not _tv.is_configured():
+        return JSONResponse(status_code=503, content={"error": "Auth0 not configured. Set AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET in .env"})
+    return RedirectResponse(_tv.get_login_url())
+
+
+@app.get("/auth/callback")
+async def auth_callback(code: str = "", error: str = ""):
+    """Handle Auth0 OAuth callback. Exchanges code for tokens."""
+    from fastapi.responses import HTMLResponse as _HTML
+    if error:
+        return _HTML(f"<h3>Auth error: {error}</h3><a href='/dashboard'>Back</a>")
+    if not code:
+        return _HTML("<h3>Missing code</h3><a href='/dashboard'>Back</a>")
+
+    tokens = await _tv.exchange_code_for_tokens(code)
+    if not tokens:
+        return _HTML("<h3>Token exchange failed</h3><a href='/dashboard'>Back</a>")
+
+    access_token = tokens.get("access_token", "")
+    # Show a page that stores the token in localStorage and redirects to dashboard
+    return _HTML(f"""<!DOCTYPE html>
+<html><head><title>Nexus — Auth Complete</title></head>
+<body style="background:#0a0a0f;color:#00d4ff;font-family:monospace;text-align:center;padding:80px">
+<h2>✅ Authentication Complete</h2>
+<p>Nexus agents can now access your connected services via Token Vault.</p>
+<script>
+  localStorage.setItem('nexus_auth_token', '{access_token}');
+  setTimeout(() => window.location.href = '/dashboard', 1500);
+</script>
+<p>Redirecting to dashboard...</p>
+</body></html>""")
+
+
+@app.get("/auth/logout")
+async def auth_logout():
+    """Clear local token and redirect to Auth0 logout."""
+    from fastapi.responses import HTMLResponse as _HTML
+    return _HTML("""<!DOCTYPE html>
+<html><head><title>Nexus — Logged Out</title></head>
+<body style="background:#0a0a0f;color:#00d4ff;font-family:monospace;text-align:center;padding:80px">
+<h2>Logged out</h2>
+<script>localStorage.removeItem('nexus_auth_token');</script>
+<p><a href="/dashboard" style="color:#00d4ff">Back to Dashboard</a></p>
+</body></html>""")
+
+
+@app.get("/api/auth/connections")
+async def api_auth_connections(request: Request):
+    """Return Token Vault connection status for the current user.
+
+    Requires Authorization: Bearer <auth0_access_token> header.
+    Used by dashboard to show which services the user has connected.
+    """
+    if not _tv.is_configured():
+        return {"auth0_configured": False, "connections": []}
+
+    user_token = get_user_token(request)
+    if not user_token:
+        return {"auth0_configured": True, "connections": [], "error": "Not authenticated"}
+
+    connections = await _tv.get_user_connections(user_token)
+    return {"auth0_configured": True, "connections": connections}
+
+
+@app.post("/api/brain")
+async def api_set_brain(request: Request):
+    """切換大腦模式：gemini / gemini_web / local / auto"""
+    data = await request.json()
+    mode = data.get("mode", "auto")
+    if mode not in ("gemini", "gemini_web", "local", "auto"):
+        return JSONResponse(status_code=400, content={"error": "無效的模式"})
+    if llm_provider:
+        llm_provider.router.brain_mode = mode
+    return {"ok": True, "brain_mode": mode, "brain": llm_provider.active_brain if llm_provider else "unknown"}
+
+
+@app.post("/api/upload")
+async def api_upload(file: UploadFile = File(...)):
+    """Accept an image upload.
+
+    Storage strategy:
+    - GCS_BUCKET_NAME set → upload to Google Cloud Storage (satisfies GCP requirement)
+      + keep a local /tmp copy for VisionAgent OCR processing
+    - GCS_BUCKET_NAME not set → local storage (dev mode)
+    """
+    import uuid
+    allowed = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+    if file.content_type not in allowed:
+        return JSONResponse(status_code=400, content={"error": "不支援的檔案格式"})
+
+    suffix = Path(file.filename or "image.jpg").suffix or ".jpg"
+    file_id = uuid.uuid4().hex
+    data = await file.read()
+
+    gcs_bucket = os.environ.get("GCS_BUCKET_NAME", "")
+    if gcs_bucket:
+        # ── Google Cloud Storage path ──
+        try:
+            from google.cloud import storage as gcs
+            blob_name = f"uploads/{file_id}{suffix}"
+            loop = asyncio.get_event_loop()
+
+            def _upload():
+                client = gcs.Client()
+                bucket = client.bucket(gcs_bucket)
+                blob = bucket.blob(blob_name)
+                blob.upload_from_string(data, content_type=file.content_type)
+
+            await loop.run_in_executor(None, _upload)
+            logger.info(f"Uploaded to GCS: gs://{gcs_bucket}/{blob_name}")
+        except Exception as e:
+            logger.error(f"GCS upload failed: {e}")
+            return JSONResponse(status_code=500, content={"error": f"GCS 上傳失敗：{e}"})
+
+        # Keep a local /tmp copy for VisionAgent (OCR needs a file path)
+        tmp_dir = Path("/tmp/nexus_uploads")
+        tmp_dir.mkdir(exist_ok=True, parents=True)
+        local_path = tmp_dir / f"{file_id}{suffix}"
+        local_path.write_bytes(data)
+        return {"path": str(local_path), "gcs": f"gs://{gcs_bucket}/{blob_name}"}
+
+    else:
+        # ── Local storage (dev mode) ──
+        if os.environ.get("K_SERVICE"):
+            upload_dir = Path("/tmp/nexus_uploads")
+        else:
+            upload_dir = config.data_dir() / "uploads"
+        upload_dir.mkdir(exist_ok=True, parents=True)
+        dest = upload_dir / f"{file_id}{suffix}"
+        dest.write_bytes(data)
+        return {"path": str(dest)}
 
 
 @app.post("/api/chat")
@@ -396,10 +662,12 @@ async def api_chat(request: Request):
     body = await request.json()
     user_input = body.get("content", "")
     session_id = body.get("session_id", "default")
+    user_token = get_user_token(request)  # Auth0 JWT (None if not logged in)
 
     events = []
     final_answer = ""
-    async for event in orchestrator.process(user_input, session_id):
+    extra_ctx = {"user_token": user_token} if user_token else None
+    async for event in orchestrator.process(user_input, session_id, extra_context=extra_ctx):
         events.append({
             "type": event.event_type,
             "content": event.content,
@@ -421,6 +689,11 @@ async def dashboard(request: Request):
         "app_name": config.get("app.name", "Nexus AI"),
         "api_key": get_api_key() or "",
     })
+
+
+@app.get("/voice", response_class=HTMLResponse)
+async def voice_page(request: Request):
+    return templates.TemplateResponse("voice.html", {"request": request})
 
 
 @app.get("/api/dashboard")
@@ -455,6 +728,8 @@ async def api_dashboard():
         ] if skill_loader else [],
         "schedules": schedules,
         "telegram": bool(telegram and getattr(telegram, "_running", False)),
+        "brain": llm_provider.active_brain if llm_provider else "unknown",
+        "brain_mode": llm_provider.router.brain_mode if llm_provider else "auto",
     }
 
 

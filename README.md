@@ -160,6 +160,25 @@ All calls go through **Google GenAI SDK** (`google-generativeai`), with Groq Lla
 
 ## Key Features
 
+### 🎤 Gemini Live API — Real-Time Voice Interface
+Nexus AI goes beyond text with a **full-duplex voice interface** powered by `gemini-2.0-flash-live-001`.
+
+- **Browser mic** → 16kHz PCM → WebSocket `/ws/voice` → **Gemini Live API**
+- Gemini responds with natural speech (24kHz PCM) streamed back in real time
+- **Function calling** during voice: search web, check weather, calculate — all mid-conversation
+- No push-to-talk latency: bidirectional audio streaming via `google-genai` SDK
+- Transcript displayed in real time alongside audio playback
+
+```
+User speaks → AudioWorklet captures 16kHz PCM
+             → base64 WebSocket chunks → FastAPI /ws/voice
+             → client.aio.live.connect("gemini-2.0-flash-live-001")
+             → Gemini Live API (bidirectional stream)
+             → audio PCM chunks → browser AudioContext plays 24kHz
+```
+
+Navigate to `/voice` after deployment to try it.
+
 ### 🔮 Gemini 2.0 Flash — Core Intelligence
 Every agent calls Gemini 2.0 Flash via **Google GenAI SDK**. The Vision agent uses Gemini's multimodal API to analyze images sent via Telegram — anatomy diagrams, X-rays, clinical figures — and returns structured descriptions in Traditional Chinese.
 
