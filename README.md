@@ -95,6 +95,8 @@ I built Nexus AI to handle all of it — powered by **Gemini 2.5 Flash** + **Gem
 | PubMed paper (text + metadata) | Synthesis + summarization | Structured citation card with PMID, authors, relevance |
 | Natural language schedule (text) | Intent extraction | Parsed cron expression → autonomous execution |
 
+| Conversation history (text) | **Embedding API** `gemini-embedding-001` | 768-dim semantic vector stored in SQLite for memory recall |
+
 All calls go through **Google GenAI SDK** (`google-genai`), with Groq Llama as offline fallback.
 
 ---
@@ -148,7 +150,7 @@ All calls go through **Google GenAI SDK** (`google-genai`), with Groq Llama as o
 │                  5-LAYER MEMORY SYSTEM                           │
 │  ① Working Memory    7 attention slots, LRU eviction            │
 │  ② Episodic Memory   SQLite FTS5, full-text search              │
-│  ③ Semantic Memory   ChromaDB vector search                     │
+│  ③ Semantic Memory   Gemini Embedding API (gemini-embedding-001) │
 │  ④ Procedural Cache  response dedup, 1hr TTL                   │
 │  ⑤ PyramidMemory     daily→monthly→yearly LLM compression       │
 └──────────────┬──────────────────────────────────────────────────┘
@@ -237,7 +239,7 @@ Three real databases — **PubMed** (NCBI E-utilities), **Semantic Scholar**, **
 ```
 Working Memory   →  7-slot attention buffer (LRU eviction)
 Episodic         →  SQLite FTS5 full-text search
-Semantic         →  ChromaDB vector similarity
+Semantic         →  Gemini Embedding API (gemini-embedding-001, MTEB 68.17)
 Procedural       →  response cache (1hr TTL)
 PyramidMemory    →  LLM compresses daily → monthly → yearly summaries
                     Long-term context injected into every conversation
