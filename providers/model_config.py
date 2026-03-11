@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -15,6 +16,11 @@ class ModelSpec:
     temperature: float
     use_for: list[str]
     api_base: str = ""
+    extra_config: dict = None  # 本地模型專用設定（model_path, mmproj_path, n_threads）
+
+    def __post_init__(self):
+        if self.extra_config is None:
+            self.extra_config = {}
 
 
 class ModelRouter:
@@ -23,7 +29,10 @@ class ModelRouter:
     def __init__(self) -> None:
         cfg = config.load_config()["providers"]
         self.primary_name: str = cfg["primary"]
+        self.local_primary_name: str = cfg.get("local_primary", "")
         self.fallback_name: str = cfg["fallback"]
+        # NEXUS_BRAIN_MODE env var overrides config.yaml (useful for Cloud Run)
+        self.brain_mode: str = os.environ.get("NEXUS_BRAIN_MODE") or cfg.get("brain_mode", "auto")
         self._models: dict[str, ModelSpec] = {}
         for name, mcfg in cfg.get("models", {}).items():
             self._models[name] = ModelSpec(
@@ -32,6 +41,10 @@ class ModelRouter:
                 temperature=mcfg["temperature"],
                 use_for=mcfg.get("use_for", []),
                 api_base=mcfg.get("api_base", ""),
+                extra_config={
+                    k: v for k, v in mcfg.items()
+                    if k not in {"model_id", "max_tokens", "temperature", "use_for", "api_base"}
+                },
             )
 
     def route(self, task_type: str = "general") -> ModelSpec:

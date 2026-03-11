@@ -1,0 +1,16 @@
+.env
+.git
+.gitignore
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+data/uploads/*
+data/reminders.db
+data/auto_schedules.json
+data/morning_report.json
+*.log
+.venv
+venv
+node_modules
+.claude
