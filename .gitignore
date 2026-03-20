@@ -34,3 +34,11 @@ Thumbs.db
 venv/
 .venv/
 env/
+
+# Large model files
+models/*.gguf
+models/*.bin
+models/*.safetensors
+
+# Stray version files
+=*
