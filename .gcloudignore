@@ -1,0 +1,35 @@
+# .gcloudignore — files excluded from Cloud Build upload
+# (same syntax as .gitignore)
+
+.git/
+.gitignore
+.env
+.env.example
+
+# Local model files (huge GGUF, not needed on Cloud Run)
+models/
+
+# Local data (ephemeral on Cloud Run anyway)
+data/
+
+# Python cache
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Test files
+tests/
+
+# Dev tools
+*.ps1
+*.sh
+check_video.ps1
+start_nexus.ps1
+
+# Docs / screenshots (not needed in container)
+docs/
+deploy/ORACLE_GUIDE.md
+deploy/oracle_setup.sh
+deploy/vertex_ai.py
+deploy/google_genai_sdk_example.py

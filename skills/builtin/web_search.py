@@ -63,7 +63,15 @@ class WebSearchSkill(BaseSkill):
             return SkillResult(content="\n".join(lines), success=True, source=self.name)
 
         except Exception as e:
-            return SkillResult(content=f"搜尋失敗: {e}", success=False, source=self.name)
+            import httpx
+            if isinstance(e, httpx.TimeoutException):
+                msg = "⚠️ 搜尋服務回應超時，請稍後再試。"
+            elif isinstance(e, httpx.ConnectError):
+                msg = "⚠️ 無法連接搜尋服務，請確認網路狀態。"
+            else:
+                msg = "⚠️ 搜尋暫時失敗，請稍後再試。"
+            logger.warning(f"Web search error: {e}")
+            return SkillResult(content=msg, success=False, source=self.name)
 
     def _parse_results(self, html: str) -> list[tuple[str, str, str]]:
         """Parse DuckDuckGo HTML results. Returns (title, snippet, url)."""

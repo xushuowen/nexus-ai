@@ -11,5 +11,16 @@ from nexus import config
 if __name__ == "__main__":
     host = config.get("app.host", "0.0.0.0")
     port = config.get("app.port", 8000)
-    print(f"\n  Starting Nexus AI on http://{host}:{port}\n")
-    uvicorn.run("nexus.main:app", host=host, port=port, reload=False)
+
+    # Use HTTPS if SSL cert exists (required for PWA install on mobile)
+    ssl_key  = Path(__file__).parent / "data" / "nexus.key"
+    ssl_cert = Path(__file__).parent / "data" / "nexus.crt"
+    if ssl_key.exists() and ssl_cert.exists():
+        print(f"\n  Starting Nexus AI on https://{host}:{port}\n")
+        uvicorn.run(
+            "nexus.main:app", host=host, port=port, reload=False,
+            ssl_keyfile=str(ssl_key), ssl_certfile=str(ssl_cert),
+        )
+    else:
+        print(f"\n  Starting Nexus AI on http://{host}:{port}\n")
+        uvicorn.run("nexus.main:app", host=host, port=port, reload=False)

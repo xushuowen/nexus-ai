@@ -3,6 +3,21 @@
    Dark sci-fi terminal aesthetic, built on style.css variables
    ═══════════════════════════════════════════════════════ */
 
+/* ─── Brain Mode Buttons ─── */
+.brain-btn {
+    font-family: var(--font-title);
+    font-size: 11px;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    opacity: 0.4;
+    transition: opacity .2s, border-color .2s;
+}
+.brain-btn:hover { opacity: 0.8; border-color: var(--accent); }
+
 /* ─── App shell ─── */
 #dash-app {
     position: relative;

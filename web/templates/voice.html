@@ -448,6 +448,20 @@ function connect() {
         } else if (msg.type === "audio") {
             const bytes = base64ToFloat32(msg.data);
             queueAudio(bytes);
+        } else if (msg.type === "user_text") {
+            // Replace the "語音輸入中" placeholder with real transcript
+            const msgs = transcript.querySelectorAll(".msg.user");
+            if (msgs.length) {
+                const last = msgs[msgs.length - 1];
+                const bubble = last.querySelector(".msg-bubble");
+                if (bubble && bubble.textContent.includes("語音輸入中")) {
+                    bubble.textContent = msg.data;
+                } else {
+                    addUserMsg(msg.data);
+                }
+            } else {
+                addUserMsg(msg.data);
+            }
         } else if (msg.type === "text") {
             appendAssistantText(msg.data);
         } else if (msg.type === "turn_complete") {
@@ -472,8 +486,11 @@ function connect() {
 async function initAudio() {
     if (audioCtx) return;
     try {
-        audioCtx = new AudioContext({ sampleRate: 16000 });
         mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        // Request 16kHz; browser may use hardware rate instead
+        audioCtx = new AudioContext({ sampleRate: 16000 });
+        const hwRate = audioCtx.sampleRate; // actual rate (may differ from 16000)
+
         const source = audioCtx.createMediaStreamSource(mediaStream);
         analyser = audioCtx.createAnalyser();
         analyser.fftSize = 256;
@@ -481,12 +498,26 @@ async function initAudio() {
 
         scriptProcessor = audioCtx.createScriptProcessor(4096, 1, 1);
         source.connect(scriptProcessor);
-        scriptProcessor.connect(audioCtx.destination);
+        // Connect to silent gain node (required for onaudioprocess to fire, no echo)
+        const silentGain = audioCtx.createGain();
+        silentGain.gain.value = 0;
+        scriptProcessor.connect(silentGain);
+        silentGain.connect(audioCtx.destination);
 
         scriptProcessor.onaudioprocess = (e) => {
             if (!isRecording || ws?.readyState !== WebSocket.OPEN) return;
-            const float32 = e.inputBuffer.getChannelData(0);
-            const int16 = float32ToInt16(float32);
+            const f32 = e.inputBuffer.getChannelData(0);
+            // Downsample to 16kHz if browser used a different rate
+            let samples = f32;
+            if (hwRate !== 16000) {
+                const ratio = hwRate / 16000;
+                const outLen = Math.floor(f32.length / ratio);
+                samples = new Float32Array(outLen);
+                for (let i = 0; i < outLen; i++) {
+                    samples[i] = f32[Math.floor(i * ratio)];
+                }
+            }
+            const int16 = float32ToInt16(samples);
             const b64 = arrayBufferToBase64(int16.buffer);
             ws.send(JSON.stringify({ type: "audio", data: b64 }));
         };

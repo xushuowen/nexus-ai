@@ -49,13 +49,31 @@ TEAMS = {
     },
 }
 
-# Keywords that suggest conference mode
+# Keywords/patterns that suggest conference mode (multi-agent collaboration)
 CONFERENCE_TRIGGERS = [
-    "比較", "compare", "分析優缺點", "pros and cons",
-    "討論", "discuss", "辯論", "debate",
+    # Comparison & analysis
+    "比較", "compare", "分析優缺點", "pros and cons", "利弊", "優劣",
+    "哪個比較好", "哪個更好", "哪種方案", "怎麼選", "應該選",
+    # Discussion & debate
+    "討論", "discuss", "辯論", "debate", "不同觀點", "各方意見",
+    # Multi-perspective
     "多角度", "multiple perspectives", "深入分析", "deep analysis",
+    "全面分析", "完整評估", "各種可能", "有哪些方法",
+    # Explicit conference
     "會議", "conference", "團隊討論", "team discuss",
+    # Design & planning
+    "架構設計", "系統設計", "方案規劃", "技術選型",
+    "如何設計", "怎麼規劃", "最佳實踐", "best practice",
 ]
+
+# Regex patterns for complex analytical questions
+_COMPLEX_QUESTION_RE = __import__('re').compile(
+    r'(為什麼.{0,20}(比|更|還是|or)|'
+    r'(哪個|哪種|哪一個).{0,30}(好|佳|推薦|建議)|'
+    r'(優點|缺點|好處|壞處).{0,20}(優點|缺點|好處|壞處)|'
+    r'(要怎麼|應該怎麼|如何).{0,30}(設計|規劃|選擇|決定))',
+    __import__('re').IGNORECASE,
+)
 
 
 @dataclass
@@ -93,10 +111,22 @@ class AgentConference:
         if any(t in text for t in ["會議", "conference", "團隊討論"]):
             return self._detect_team(text)
 
-        # Complex comparison/analysis (needs 2+ triggers or long input)
         trigger_count = sum(1 for t in CONFERENCE_TRIGGERS if t in text)
-        if trigger_count >= 2 or (trigger_count >= 1 and len(text) > 100):
+
+        # Strong trigger signal (2+ keywords)
+        if trigger_count >= 2:
             return self._detect_team(text)
+
+        # Regex-detected complex analytical question structure
+        if _COMPLEX_QUESTION_RE.search(user_input):
+            return self._detect_team(text)
+
+        # Single trigger + long/complex query (> 80 CJK chars or multiple sentences)
+        if trigger_count >= 1:
+            cjk_len = len(__import__('re').findall(r'[\u4e00-\u9fff]', text))
+            sentence_count = len(__import__('re').split(r'[。！？\.\!\?]', text))
+            if cjk_len > 80 or sentence_count > 3:
+                return self._detect_team(text)
 
         return None
 
@@ -210,8 +240,8 @@ class AgentConference:
                 logger.info(f"Conference consensus reached at round {round_num}")
                 break
 
-        # Generate summary
-        summary = self._build_summary(topic, team["name"], rounds, participants)
+        # Generate summary (LLM synthesis if available)
+        summary = await self._build_summary(topic, team["name"], rounds, participants)
 
         return ConferenceResult(
             topic=topic, team_name=team["name"],
@@ -232,8 +262,15 @@ class AgentConference:
         if not contributions:
             return False
 
-        _AGREE = ["同意", "正確", "沒錯", "一致", "agree", "consensus", "correct", "agree with"]
-        _DISAGREE = ["不同意", "反對", "disagree", "incorrect", "wrong", "differ", "however, i think"]
+        _AGREE = [
+            "同意", "正確", "沒錯", "一致", "贊同", "認同", "支持", "確實", "對的",
+            "agree", "consensus", "correct", "agree with", "i concur", "that's right",
+        ]
+        _DISAGREE = [
+            "不同意", "反對", "不贊同", "不認同", "不正確", "有問題", "我不覺得",
+            "disagree", "incorrect", "wrong", "differ", "however, i think",
+            "but i think", "actually,", "on the contrary",
+        ]
 
         agree_count = 0
         for c in contributions:
@@ -255,35 +292,55 @@ class AgentConference:
 
         return agree_count >= len(contributions) * 0.6
 
-    def _build_summary(
+    async def _build_summary(
         self, topic: str, team_name: str,
         rounds: list[ConferenceRound], participants: list[str],
     ) -> str:
-        """Build a formatted conference summary."""
-        lines = [
+        """Build a formatted conference summary, synthesized by LLM if available."""
+        header = "\n".join([
             f"🏛️ **{team_name}會議摘要**",
             f"📋 主題: {topic}",
             f"👥 參與者: {', '.join(participants)}",
             f"🔄 討論輪數: {len(rounds)}",
             "",
-        ]
+        ])
 
+        # Collect all contributions for synthesis
+        all_contributions = []
+        for r in rounds:
+            for c in r.contributions:
+                all_contributions.append(f"[{c['agent']}]: {c['content'][:400]}")
+
+        discussion_text = "\n\n".join(all_contributions)
+
+        # Use LLM to synthesize a real conclusion
+        if self.llm and all_contributions:
+            try:
+                synthesis_prompt = (
+                    f"以下是多個 AI Agent 對「{topic}」的討論內容：\n\n"
+                    f"{discussion_text}\n\n"
+                    "請整合以上各方觀點，給出一個條理清晰的最終結論。"
+                    "格式：先列重點共識（條列），再給出建議或結論（1-3句）。"
+                    "回應語言跟問題相同。"
+                )
+                conclusion = await self.llm.complete(
+                    synthesis_prompt,
+                    task_type="complex_reasoning",
+                    source="conference_summary",
+                )
+                return header + f"💡 **綜合結論**\n\n{conclusion}"
+            except Exception as e:
+                logger.warning(f"Conference LLM summary failed: {e}")
+
+        # Fallback: plain text summary without LLM
+        lines = [header]
         for r in rounds:
             lines.append(f"--- 第 {r.round_number} 輪 ---")
             for c in r.contributions:
-                agent = c["agent"]
-                content = c["content"][:300]
-                lines.append(f"**🤖 {agent}**: {content}")
+                lines.append(f"**🤖 {c['agent']}**: {c['content'][:300]}")
                 lines.append("")
-
             if r.consensus_reached:
-                lines.append("✅ **已達成共識**")
-                lines.append("")
-
-        # Final conclusion from last round
-        if rounds and rounds[-1].contributions:
-            last_contents = [c["content"] for c in rounds[-1].contributions]
-            lines.append("---")
-            lines.append("💡 **結論**: 以上是各 Agent 從不同專業角度的分析結果。")
-
+                lines.append("✅ **已達成共識**\n")
+        lines.append("---")
+        lines.append("💡 **結論**: 以上是各 Agent 從不同專業角度的分析結果。")
         return "\n".join(lines)

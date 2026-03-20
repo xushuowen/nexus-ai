@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from nexus.memory.working_memory import WorkingMemory
 from nexus.memory.episodic_memory import EpisodicMemory
@@ -15,6 +15,10 @@ from nexus.memory.temporal import TemporalRetriever
 from nexus.memory.session import SessionManager
 from nexus.memory.experience_memory import ExperienceMemory
 
+if TYPE_CHECKING:
+    from nexus.memory.pyramid_memory import PyramidMemory
+    from nexus.providers.llm_provider import LLMProvider
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,6 +29,7 @@ class HybridMemory:
     Layer 2: Episodic Memory (SQLite, low tokens for lesson extraction)
     Layer 3: Semantic Memory (FTS5 + ChromaDB + Knowledge Graph, 0 tokens)
     Layer 4: Procedural Memory (cached reasoning chains, 0 tokens)
+    Layer 5: Pyramid Memory (long-term compressed summaries, optional)
     """
 
     def __init__(self) -> None:
@@ -37,6 +42,7 @@ class HybridMemory:
         self.temporal = TemporalRetriever()
         self.session = SessionManager()
         self.experience = ExperienceMemory()
+        self.pyramid: PyramidMemory | None = None
 
     async def initialize(self) -> None:
         """Initialize all memory layers."""
@@ -48,6 +54,26 @@ class HybridMemory:
         await self.session.initialize()
         await self.experience.initialize()
         logger.info("All memory layers initialized")
+
+    async def init_pyramid(
+        self,
+        session_manager: SessionManager,
+        llm_provider: LLMProvider,
+    ) -> None:
+        """Create and initialise the PyramidMemory layer.
+
+        Must be called after the base memory layers are initialized.
+        """
+        from nexus.memory.pyramid_memory import PyramidMemory
+        self.pyramid = PyramidMemory(session_manager, llm_provider)
+        await self.pyramid.initialize()
+        logger.info("PyramidMemory layer attached to HybridMemory")
+
+    async def get_long_term_context(self) -> str:
+        """Return the pyramid long-term memory context string, or '' if not enabled."""
+        if self.pyramid is None:
+            return ""
+        return await self.pyramid.build_context()
 
     async def search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
         """Search across all memory layers and merge results."""
@@ -185,6 +211,11 @@ class HybridMemory:
 
     async def close(self) -> None:
         """Close all memory connections."""
+        if self.pyramid is not None:
+            try:
+                await self.pyramid.close()
+            except Exception as e:
+                logger.warning("PyramidMemory close error: %s", e)
         await self.episodic.close()
         await self.fts.close()
         await self.vector.close()

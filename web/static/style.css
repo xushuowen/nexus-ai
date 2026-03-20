@@ -719,7 +719,68 @@ body {
     cursor: not-allowed;
     box-shadow: none;
 }
+#d-upload-btn, #upload-btn {
+    width: 38px; height: 38px;
+    background: rgba(0, 180, 255, 0.08);
+    color: var(--accent);
+    border: 1px solid rgba(0, 180, 255, 0.3);
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+#d-upload-btn:hover, #upload-btn:hover { background: rgba(0, 180, 255, 0.2); }
+#d-upload-btn.has-image, #upload-btn.has-image { border-color: #00d4aa; color: #00d4aa; background: rgba(0,212,170,0.12); }
 
+/* ── Mic Button ── */
+#tts-btn {
+    width: 38px; height: 38px;
+    background: rgba(0, 212, 170, 0.08);
+    color: #00d4aa;
+    border: 1px solid rgba(0, 212, 170, 0.3);
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+#tts-btn:hover { background: rgba(0, 212, 170, 0.2); }
+
+#d-mic-btn, #mic-btn {
+    width: 38px; height: 38px;
+    background: rgba(0, 180, 255, 0.08);
+    color: var(--accent);
+    border: 1px solid rgba(0, 180, 255, 0.3);
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    user-select: none;
+}
+#d-mic-btn:hover, #mic-btn:hover { background: rgba(0, 180, 255, 0.2); }
+#d-mic-btn.listening, #mic-btn.listening {
+    background: rgba(255, 60, 80, 0.2);
+    border-color: #ff3c50;
+    color: #ff3c50;
+    animation: mic-pulse 1s infinite;
+}
+@keyframes mic-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 60, 80, 0.4); }
+    50%       { box-shadow: 0 0 0 6px rgba(255, 60, 80, 0); }
+}
+#d-img-preview, #img-preview {
+    display: flex; align-items: center; gap: 6px;
+    margin-top: 4px; padding: 2px 6px;
+    font-size: 11px; color: var(--text-dim);
+}
+#d-img-preview.hidden, #img-preview.hidden { display: none; }
+#img-preview button {
+    background: none; border: none; color: var(--text-dim);
+    cursor: pointer; font-size: 12px; padding: 0 2px;
+}
+#img-preview button:hover { color: #ff4466; }
 /* ═══════════════════════════════════════
    Right Panel: Status
    ═══════════════════════════════════════ */

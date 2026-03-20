@@ -21,24 +21,34 @@ from nexus.providers.model_config import ModelRouter
 
 logger = logging.getLogger(__name__)
 
-_BASE_SYSTEM_PROMPT = """You are Nexus AI, an advanced multi-agent AI assistant system.
+_BASE_SYSTEM_PROMPT = """你是 Nexus AI，一個在本機運行的先進多代理人 AI 助理系統。
 
-Core traits:
-- You are helpful, accurate, and concise
-- You respond in the SAME LANGUAGE the user writes in (Chinese → Chinese, English → English, etc.)
-- You can handle coding, research, reasoning, file operations, web search, and more
-- You remember conversation context and refer back to it naturally
-- When uncertain, you say so honestly rather than making things up
+語言規則（最優先遵守）:
+- 使用者用繁體中文 → 你必須用繁體中文回應，使用台灣慣用語彙
+- 使用者用英文 → 你用英文回應
+- 混合語言 → 以使用者主要語言為準
+- 絕對不要在中文回應中插入不必要的英文，除非是專有名詞或程式碼
 
-Your personality:
-- Professional but friendly
-- Direct and clear, not verbose
-- You use clean formatting when appropriate (bullet points, code blocks, etc.)
+核心能力:
+- 程式開發（Python / JS / SQL / 爬蟲 / 自動化等）
+- 研究調查（網路搜尋、資料整合、知識問答）
+- 邏輯推理（分析、計算、比較、驗證）
+- 檔案操作、Shell 命令執行
+- 圖片辨識與分析
 
-System info:
-- You are running locally on the user's machine
-- You have a daily token budget, so you are efficient with your responses
-- You have 9 specialist agents and multiple skills that can be activated for complex tasks"""
+回應風格:
+- 直接切入重點，不說廢話，不重複問題
+- 清楚但不囉嗦；需要條列時才條列，不濫用格式
+- 不確定就直說，不猜測、不捏造
+- 語氣自然親切，如同一個懂技術的朋友
+
+系統資訊:
+- 本機執行，有每日 Token 預算，請精簡回應
+- 擁有多個專門代理人（Coder / Research / Reasoning / Vision 等）和技能模組可調用"""
+
+# Language detection patterns
+_LANG_CJK_RE = __import__('re').compile(r'[\u4e00-\u9fff\u3040-\u30ff]')
+_LANG_EN_RE  = __import__('re').compile(r'[a-zA-Z]{3,}')
 
 # Keywords that suggest specialist agent routing is needed
 SPECIALIST_TRIGGERS = {
@@ -113,17 +123,18 @@ class Orchestrator:
         self.max_hypotheses = config.get("orchestrator.max_parallel_hypotheses", 3)
         self._memory = None
         self._skill_loader = None
-        self._conference = AgentConference(registry, llm)
+        self._conference = AgentConference(registry, llm, memory=None)
         self._event_callbacks: list = []
         self._request_count: int = 0  # for periodic working memory decay
 
     def set_memory(self, memory) -> None:
         self._memory = memory
+        self._conference.memory = memory
 
     def set_skill_loader(self, loader) -> None:
         self._skill_loader = loader
 
-    def _build_system_prompt(self) -> str:
+    def _build_system_prompt(self, user_input: str = "") -> str:
         """Build system prompt with dynamic skill index injection."""
         prompt = _BASE_SYSTEM_PROMPT
 
@@ -132,13 +143,30 @@ class Orchestrator:
             skill_index = self._skill_loader.get_index_text()
             if skill_index:
                 prompt += (
-                    "\n\nAvailable skills (users can trigger these directly):\n"
+                    "\n\n可用技能（使用者可直接觸發）:\n"
                     + skill_index
                 )
+
+        # Inject language reinforcement based on detected user language
+        if user_input:
+            lang_hint = self._detect_language(user_input)
+            if lang_hint:
+                prompt += f"\n\n{lang_hint}"
 
         # Inject Titan Protocol format instructions
         prompt = TitanProtocol.inject_prompt(prompt)
         return prompt
+
+    @staticmethod
+    def _detect_language(text: str) -> str:
+        """Return a language reinforcement hint based on detected script in text."""
+        cjk = len(_LANG_CJK_RE.findall(text))
+        eng = len(_LANG_EN_RE.findall(text))
+        if cjk > eng:
+            return "【重要】使用者使用繁體中文，請務必以流暢繁體中文回應。"
+        if eng > cjk and eng >= 2:
+            return "【Important】User is writing in English. Reply in English."
+        return ""
 
     def on_event(self, callback) -> None:
         self._event_callbacks.append(callback)
@@ -186,12 +214,13 @@ class Orchestrator:
         history = []
         if self._memory:
             try:
-                history = await self._memory.session.get_context_for_prompt(session_id, max_messages=16)
+                history = await self._memory.session.get_context_for_prompt(session_id, max_messages=24)
             except Exception as e:
                 logger.warning(f"Session load error: {e}")
 
         # Step 4: Check skills first (Level 1 index match, 0 tokens)
-        if self._skill_loader:
+        # Skip skill matching if a specific agent is forced (e.g. vision with image upload)
+        if self._skill_loader and not force_agent:
             skill = self._skill_loader.match(user_input)
             if skill:
                 await self._emit("routing", f"[{ts}] Skill matched: {skill.name}")
@@ -275,32 +304,65 @@ class Orchestrator:
         )
 
     def _detect_specialist(self, user_input: str) -> str | None:
-        """Detect if a specialist agent is needed using keyword matching (0 tokens)."""
+        """Detect specialist agent using length-weighted keyword scoring (0 tokens).
+
+        Scoring: longer/more-specific keywords get higher weight (1 + len*0.08).
+        Threshold scales with input length to reduce false positives on long texts.
+        """
         import re
         text = user_input.lower()
-        # Count "words" in a CJK-aware way: ASCII words + each CJK char is ~1 word
-        ascii_words = len(text.split())
-        cjk_chars = len(re.findall(r'[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7ff]', text))
-        approx_words = max(ascii_words, cjk_chars)
 
-        scores: dict[str, int] = {}
+        # CJK-aware approximate word count
+        cjk_chars = len(re.findall(r'[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7ff]', text))
+        approx_words = max(len(text.split()), cjk_chars)
+
+        # Explicit command prefix lowers the threshold (user clearly wants action)
+        is_explicit_cmd = bool(re.search(
+            r'^[\s]*(幫我|請你|請幫|麻煩|幫|寫一個|做一個|建立|查詢|搜尋|分析|找一下)',
+            user_input,
+        ))
+
+        scores: dict[str, float] = {}
         for agent_name, keywords in SPECIALIST_TRIGGERS.items():
-            count = sum(1 for kw in keywords if kw in text)
-            if count >= 2:
-                scores[agent_name] = count
-            elif count == 1 and approx_words <= 8:
-                # Short queries (≤8 tokens including CJK) only need 1 keyword match
-                scores[agent_name] = count
+            total = 0.0
+            for kw in keywords:
+                if kw.lower() in text:
+                    # Longer keywords are more specific → higher weight
+                    total += 1.0 + len(kw) * 0.08
+
+            if total == 0:
+                continue
+
+            # Adaptive minimum score: stricter for long inputs to avoid false routes
+            if is_explicit_cmd or approx_words <= 6:
+                min_score = 0.9     # single keyword enough for very short/command queries
+            elif approx_words <= 14:
+                min_score = 1.6
+            else:
+                min_score = 2.8    # long texts need stronger evidence
+
+            if total >= min_score:
+                scores[agent_name] = total
 
         if not scores:
             return None
         return max(scores, key=scores.get)
 
+    async def _get_pyramid_context(self) -> str:
+        """Retrieve long-term pyramid memory context."""
+        if not self._memory:
+            return ""
+        try:
+            return await self._memory.get_long_term_context()
+        except Exception as e:
+            logger.warning(f"Pyramid context error: {e}")
+            return ""
+
     async def _chat_path(
         self, user_input: str, history: list[dict], session_id: str
     ) -> AgentResult:
         """Direct chat: send conversation history + new message to LLM."""
-        system_prompt = self._build_system_prompt()
+        system_prompt = self._build_system_prompt(user_input)
         messages = [{"role": "system", "content": system_prompt}]
 
         memory_context = await self._get_memory_context(user_input)
@@ -318,7 +380,15 @@ class Orchestrator:
                 "content": f"User experience context:\n{experience_context}",
             })
 
-        for msg in history[:-1]:
+        # Pyramid long-term memory injection
+        pyramid_context = await self._get_pyramid_context()
+        if pyramid_context:
+            messages.append({
+                "role": "system",
+                "content": pyramid_context,
+            })
+
+        for msg in history:
             messages.append(msg)
         messages.append({"role": "user", "content": user_input})
 
@@ -358,6 +428,9 @@ class Orchestrator:
                 parts.append(f"{role}: {msg['content'][:200]}")
             recent_history = "\n".join(parts)
 
+        # Pyramid long-term memory context
+        pyramid_context = await self._get_pyramid_context()
+
         message = AgentMessage(
             role="user", content=user_input, sender="user",
             metadata=extra_context or {},
@@ -368,11 +441,14 @@ class Orchestrator:
             "session_id": session_id,
             "complexity": "moderate",
         }
+        if pyramid_context:
+            context["long_term_memory"] = pyramid_context
         if extra_context:
             context.update(extra_context)
 
         try:
-            result = await asyncio.wait_for(agent.process(message, context), timeout=30.0)
+            agent_timeout = 60.0 if agent_name == "vision" else 30.0
+            result = await asyncio.wait_for(agent.process(message, context), timeout=agent_timeout)
 
             # Titan Protocol: parse agent response for memory extraction
             titan = TitanProtocol.parse(result.content)
@@ -426,7 +502,8 @@ class Orchestrator:
         if not self._memory:
             return ""
         # Cache in working memory to avoid repeated 5-layer searches for same query
-        cache_key = f"_mem:{query[:60]}"
+        import hashlib
+        cache_key = f"_mem:{hashlib.md5(query.encode()).hexdigest()}"
         cached = self._memory.working.retrieve(cache_key)
         if cached is not None:
             return cached

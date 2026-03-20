@@ -400,10 +400,25 @@ class TelegramChannel:
         self._running = True
         logger.info("✅ Telegram bot started! Send a message to your bot.")
 
-        # Start polling (non-blocking)
+        # Add error handler to suppress Conflict warnings on rapid restart
+        async def _on_error(update, ctx) -> None:
+            from telegram.error import Conflict
+            if isinstance(ctx.error, Conflict):
+                logger.warning("Telegram: Conflict detected (old instance still alive), will auto-recover in ~10s")
+                await asyncio.sleep(10)
+            else:
+                logger.warning("Telegram error: %s", ctx.error)
+
+        self._app.add_error_handler(_on_error)
+
+        # Start polling (non-blocking); wait 5s first to let old instance disconnect
         await self._app.initialize()
         await self._app.start()
-        await self._app.updater.start_polling(drop_pending_updates=True)
+        await asyncio.sleep(5)
+        await self._app.updater.start_polling(
+            drop_pending_updates=True,
+            allowed_updates=["message", "callback_query"],
+        )
 
     async def send_to_owner(self, text: str) -> bool:
         """Proactively send a message to the owner (e.g. morning report)."""

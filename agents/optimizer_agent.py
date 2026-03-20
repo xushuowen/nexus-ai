@@ -55,7 +55,7 @@ class OptimizerAgent(BaseAgent):
 
         report_parts.append(
             "\n💡 **圖形化儀表板**：在瀏覽器開啟 "
-            "[localhost:8001/dashboard](http://localhost:8001/dashboard) "
+            "[localhost:8000/dashboard](http://localhost:8000/dashboard) "
             "查看即時狀態、技能演化圖與今日排程。"
         )
         content = "\n".join(report_parts)

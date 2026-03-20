@@ -163,7 +163,15 @@ class WeatherSkill(BaseSkill):
             return SkillResult(content="\n".join(lines), success=True, source=self.name)
 
         except Exception as e:
-            return SkillResult(content=f"天氣查詢失敗: {e}", success=False, source=self.name)
+            import httpx
+            if isinstance(e, httpx.TimeoutException):
+                msg = "⚠️ 天氣服務回應超時，請稍後再試。"
+            elif isinstance(e, httpx.ConnectError):
+                msg = "⚠️ 無法連接天氣服務，請確認網路狀態。"
+            else:
+                msg = "⚠️ 天氣查詢暫時失敗，請稍後再試。"
+            logger.warning(f"Weather fetch error: {e}")
+            return SkillResult(content=msg, success=False, source=self.name)
 
     def _extract_city(self, query: str) -> str:
         """Extract city name from query."""

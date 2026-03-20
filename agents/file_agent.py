@@ -77,7 +77,39 @@ class FileAgent(BaseAgent):
         return AgentResult(content="Could not find the specified file.", confidence=0.3, source_agent=self.name)
 
     async def _write_file(self, query: str) -> AgentResult:
-        return AgentResult(
-            content="For safety, file writing requires explicit confirmation. Please specify the exact path and content.",
-            confidence=0.5, source_agent=self.name,
-        )
+        """Extract filename and content from query, write to workspace."""
+        import re
+        # Expect format: write <path> <content> or save <path> \n<content>
+        match = re.search(r'(?:write|save|create)\s+(\S+)\s+([\s\S]+)', query, re.IGNORECASE)
+        if not match:
+            return AgentResult(
+                content=(
+                    "請指定檔案路徑和內容，格式：\n"
+                    "`write workspace/filename.txt 內容`\n\n"
+                    "允許的路徑：" + ", ".join(self._allowed_paths)
+                ),
+                confidence=0.5, source_agent=self.name,
+            )
+
+        file_path = match.group(1).strip("'\"")
+        content = match.group(2).strip()
+
+        if not self._is_allowed(file_path):
+            return AgentResult(
+                content=f"⚠️ 路徑不在允許範圍內。允許目錄：{', '.join(self._allowed_paths)}",
+                confidence=0.9, source_agent=self.name,
+            )
+
+        try:
+            dest = Path(file_path)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(content, encoding="utf-8")
+            return AgentResult(
+                content=f"✅ 已寫入 `{file_path}`（{len(content)} 字元）",
+                confidence=0.9, source_agent=self.name,
+            )
+        except Exception as e:
+            return AgentResult(
+                content=f"❌ 寫檔失敗：{e}",
+                confidence=0.3, source_agent=self.name,
+            )

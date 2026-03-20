@@ -8,12 +8,33 @@ from typing import Any
 
 from nexus.skills.skill_base import BaseSkill, SkillResult
 
-def _gh_headers() -> dict[str, str]:
-    """Build GitHub API headers, including token if available."""
+async def _gh_headers(user_token: str | None = None) -> dict[str, str]:
+    """Build GitHub API headers.
+
+    Priority:
+      1. Auth0 Token Vault (scoped per-user token) — if user is logged in via Auth0
+      2. GITHUB_TOKEN env var (service-level token) — fallback for local / Telegram use
+      3. No token — unauthenticated (60 req/hr limit)
+    """
     headers = {"Accept": "application/vnd.github.v3+json"}
-    token = os.getenv("GITHUB_TOKEN", "")
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
+
+    # ── 1. Token Vault ──
+    if user_token:
+        try:
+            from nexus.security.token_vault import get_connection_token
+            vault_token = await get_connection_token(user_token, "github")
+            if vault_token:
+                headers["Authorization"] = f"Bearer {vault_token}"
+                headers["X-Token-Source"] = "auth0-token-vault"
+                return headers
+        except Exception:
+            pass  # fall through to env var
+
+    # ── 2. Env var fallback ──
+    env_token = os.getenv("GITHUB_TOKEN", "")
+    if env_token:
+        headers["Authorization"] = f"Bearer {env_token}"
+        headers["X-Token-Source"] = "env-var"
     return headers
 
 def _gh_rate_limit_msg(exc: Exception) -> str | None:
@@ -50,6 +71,7 @@ class GitHubSkill(BaseSkill):
 
     async def execute(self, query: str, context: dict[str, Any]) -> SkillResult:
         text = query.lower()
+        self._user_token = context.get("user_token")  # Auth0 JWT (may be None)
 
         if any(k in text for k in ["trending", "熱門", "流行"]):
             return await self._trending(query)
@@ -71,7 +93,7 @@ class GitHubSkill(BaseSkill):
             url = "https://api.github.com/search/repositories"
             params = {"q": query, "sort": "stars", "per_page": 5}
             async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(url, params=params, headers=_gh_headers())
+                resp = await client.get(url, params=params, headers=await _gh_headers(getattr(self, "_user_token", None)))
                 resp.raise_for_status()
                 data = resp.json()
 
@@ -110,7 +132,7 @@ class GitHubSkill(BaseSkill):
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.get(
                     f"https://api.github.com/repos/{repo_name}",
-                    headers=_gh_headers(),
+                    headers=await _gh_headers(getattr(self, "_user_token", None)),
                 )
                 resp.raise_for_status()
                 repo = resp.json()
@@ -145,7 +167,7 @@ class GitHubSkill(BaseSkill):
             url = "https://api.github.com/search/repositories"
             params = {"q": f"created:>{since}", "sort": "stars", "per_page": 8}
             async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(url, params=params, headers=_gh_headers())
+                resp = await client.get(url, params=params, headers=await _gh_headers(getattr(self, "_user_token", None)))
                 resp.raise_for_status()
                 data = resp.json()
 

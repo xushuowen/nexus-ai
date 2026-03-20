@@ -25,7 +25,7 @@ VISION_SYSTEM = """你是醫療文件與影像分析專家。分析時：
 
 回應語言跟用戶相同。"""
 
-OCR_MIN_CHARS = 30   # 少於此字數視為純影像，改用 Gemini Vision
+OCR_MIN_CHARS = 500  # 解剖圖/X光等醫學圖片直接走 Gemini Vision；只有大量文字才用 OCR
 
 # Module-level OCR reader (lazy init, loaded once)
 _ocr_reader = None
@@ -135,48 +135,42 @@ class VisionAgent(BaseAgent):
 
         user_query = query if query else "請分析這張圖片的內容。"
 
-        # ── Step 1: EasyOCR (local, no quota) ──────────────────
-        logger.info("Vision: running EasyOCR...")
-        ocr_text = await _run_ocr(path)
-        logger.info(f"Vision: OCR extracted {len(ocr_text)} chars")
-
-        if len(ocr_text) >= OCR_MIN_CHARS:
-            # ── Step 2a: Text found → use Groq (fast, free) ────
-            logger.info("Vision: text document detected, using text LLM")
-            prompt = (
-                f"以下是從圖片中 OCR 提取的文字內容：\n\n"
-                f"---\n{ocr_text}\n---\n\n"
-                f"請根據以上內容回答：{user_query}"
-            )
-            try:
-                response = await self._llm.complete(
-                    prompt=prompt,
-                    task_type="general",
-                    system_prompt=VISION_SYSTEM,
-                    source="vision_ocr",
-                )
-                return AgentResult(
-                    content=response,
-                    confidence=0.87,
-                    source_agent=self.name,
-                    reasoning_trace=[
-                        f"EasyOCR 提取文字 {len(ocr_text)} 字",
-                        "文字 LLM 分析完成（本地 OCR，不消耗視覺 quota）",
-                    ],
-                )
-            except Exception as e:
-                logger.error(f"Text LLM failed after OCR: {e}")
-                # Fall through to Gemini Vision as last resort
-
-        # ── Step 2b: No/little text → Gemini Vision ────────────
-        logger.info("Vision: visual content detected, using Gemini Vision")
+        # ── Step 1: Gemini Vision (fast, handles all image types) ──
+        logger.info("Vision: using Gemini Vision API directly")
         if not hasattr(self._llm, "complete_with_image"):
+            # Fallback: EasyOCR only if Gemini Vision unavailable
+            logger.info("Vision: Gemini Vision not available, falling back to EasyOCR...")
+            ocr_text = await _run_ocr(path)
+            logger.info(f"Vision: OCR extracted {len(ocr_text)} chars")
+            if ocr_text:
+                prompt = (
+                    f"以下是從圖片中 OCR 提取的文字內容：\n\n"
+                    f"---\n{ocr_text}\n---\n\n"
+                    f"請根據以上內容回答：{user_query}"
+                )
+                try:
+                    response = await self._llm.complete(
+                        prompt=prompt,
+                        task_type="general",
+                        system_prompt=VISION_SYSTEM,
+                        source="vision_ocr",
+                    )
+                    return AgentResult(
+                        content=response,
+                        confidence=0.8,
+                        source_agent=self.name,
+                        reasoning_trace=[f"EasyOCR 提取文字 {len(ocr_text)} 字"],
+                    )
+                except Exception as e:
+                    logger.error(f"Text LLM failed after OCR: {e}")
             return AgentResult(
-                content="圖片中文字不足，需要 Gemini Vision 分析，但目前 LLM 不支援。",
+                content="圖片分析失敗，LLM 不支援視覺功能且 OCR 無結果。",
                 confidence=0.0,
                 source_agent=self.name,
             )
 
+        # ── Gemini Vision ────────────────────────────────────────
+        logger.info("Vision: calling Gemini Vision...")
         try:
             response = await self._llm.complete_with_image(
                 prompt=user_query,
@@ -188,35 +182,51 @@ class VisionAgent(BaseAgent):
                 content=response,
                 confidence=0.88,
                 source_agent=self.name,
-                reasoning_trace=[
-                    f"EasyOCR 文字不足（{len(ocr_text)} 字）",
-                    "Gemini Vision 影像分析完成",
-                ],
+                reasoning_trace=["Gemini Vision 影像分析完成"],
             )
         except Exception as e:
             err = str(e)
-            if "429" in err or "quota" in err.lower() or "rate" in err.lower():
-                if ocr_text:
-                    # Gemini quota hit but we have some OCR text — use it anyway
-                    prompt = (
-                        f"圖片中辨識到部分文字：\n\n{ocr_text}\n\n"
-                        f"請根據以上資訊回答：{user_query}"
-                    )
-                    try:
-                        response = await self._llm.complete(
-                            prompt=prompt, task_type="general",
-                            system_prompt=VISION_SYSTEM, source="vision_ocr_fallback",
-                        )
-                        return AgentResult(
-                            content=f"（Gemini quota 已用完，以下為 OCR 部分擷取結果）\n\n{response}",
-                            confidence=0.6,
-                            source_agent=self.name,
-                        )
-                    except Exception:
-                        pass
-                msg = "⚠️ Gemini Vision quota 已用完，請明天再試。若圖片含有文字，可改為傳送文字版本由 AI 分析。"
-            elif "400" in err or "invalid" in err.lower():
-                msg = "⚠️ 圖片格式不支援，請換成 JPG 或 PNG 再試。"
-            else:
-                msg = "⚠️ 圖片分析失敗，請稍後再試。"
-            return AgentResult(content=msg, confidence=0.0, source_agent=self.name)
+            is_quota = "429" in err or "quota" in err.lower() or "rate" in err.lower()
+            logger.warning(f"Gemini Vision failed ({type(e).__name__}), trying OCR fallback...")
+
+        # ── OCR fallback (Gemini Vision quota/error) ─────────────
+        logger.info("Vision: running EasyOCR fallback (20s timeout)...")
+        try:
+            ocr_text = await asyncio.wait_for(_run_ocr(path), timeout=20.0)
+        except asyncio.TimeoutError:
+            ocr_text = ""
+            logger.warning("Vision: EasyOCR timed out in fallback")
+
+        if ocr_text and len(ocr_text) >= 10:
+            logger.info(f"Vision: OCR fallback extracted {len(ocr_text)} chars, using text LLM")
+            prompt = (
+                f"以下是從圖片中 OCR 提取的文字內容：\n\n"
+                f"---\n{ocr_text}\n---\n\n"
+                f"請根據以上內容回答：{user_query}"
+            )
+            try:
+                # Bypass browser provider — use Groq directly (fast, no Gemini quota needed)
+                groq_spec = self._llm.router.get_fallback()
+                response = await self._llm.complete(
+                    prompt=prompt,
+                    model_spec=groq_spec,
+                    system_prompt=VISION_SYSTEM,
+                    source="vision_ocr_fallback",
+                )
+                return AgentResult(
+                    content=response,
+                    confidence=0.75,
+                    source_agent=self.name,
+                    reasoning_trace=[
+                        f"Gemini Vision 不可用，OCR fallback 擷取 {len(ocr_text)} 字",
+                        "文字 LLM 分析完成",
+                    ],
+                )
+            except Exception as e2:
+                logger.error(f"OCR fallback LLM also failed: {e2}")
+
+        return AgentResult(
+            content="⚠️ 圖片分析暫時不可用（Gemini Vision quota 已用完且圖片無可辨識文字）。若圖片含有文字，請直接貼上文字內容。",
+            confidence=0.0,
+            source_agent=self.name,
+        )

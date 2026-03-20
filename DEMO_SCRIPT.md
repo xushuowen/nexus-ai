@@ -1,6 +1,6 @@
 # NEXUS AI — Demo Video Script
-### Gemini Live Agent Challenge 2026 · Creative Storytellers Track
-### Target Runtime: 3:30 — under 4-minute limit
+### Gemini Live Agent Challenge 2026 · Creative Storyteller Track
+### Target Runtime: 2:50 — under 4-minute limit
 
 ---
 
@@ -8,14 +8,14 @@
 
 | Item | Detail |
 |------|--------|
-| Runtime | 3:30 (hard limit: 4:00) |
+| Runtime | 2:50 (hard limit: 4:00) |
 | Resolution | 1920 × 1080, 60 fps |
 | Language | Narration: English · Subtitles: 繁體中文 |
 | Voice | Calm, precise — let Gemini speak |
 | Music | Ambient electronic, ≤ 20% volume |
 | Accent color | `#00d4ff` cyan · `#00ffaa` green · `#05080f` void |
 | Competition | Gemini Live Agent Challenge 2026 |
-| Track | Creative Storytellers (Multimodal) |
+| Track | Creative Storyteller (Multimodal) |
 
 ---
 
@@ -30,17 +30,17 @@ The hex grid canvas draws in from corners.
 Title: **NEXUS AI** (Orbitron 900, white). Tagline fades below.
 
 **Narration:**
-> "Nine specialist agents. Twenty-two skills. Powered by Gemini 2.0 Flash. Built by a physical therapy student — to go beyond the text box."
+> "Nine specialist agents. Twenty-four skills. Powered by Gemini 2.5 Flash. Built by a physical therapy student — to go beyond the text box."
 
-**Subtitle:** 九個代理人。二十二項技能。由 Gemini 2.0 Flash 驅動。由物理治療系學生打造——突破文字框架。
+**Subtitle:** 九個代理人。二十四項技能。由 Gemini 2.5 Flash 驅動。由物理治療系學生打造——突破文字框架。
 
 ---
 
 ### 🎬 Scene 2 — Dashboard Overview `0:08 – 0:20`
 
-**Screen:** Navigate to `localhost:8001/dashboard`
+**Screen:** Navigate to `localhost:8000/dashboard`
 - Header shows **NEXUS AI**, live clock ticking, green ONLINE badge pulsing
-- Left panel: SYSTEM row — `9 agents · 22 skills`
+- Left panel: SYSTEM row — `9 agents · 24 skills`
 - Center: Nexus Core SVG — two hexagons counter-rotating, three orbital dots
 - Right panel: DAILY BRIEF — today's scheduled tasks
 - Click **「技能演化」** tab → D3.js force graph renders, nodes orbit into position
@@ -141,23 +141,23 @@ Analysis Log:
 
 ---
 
-### 🎬 Scene 6 — Telegram: Gemini Vision `1:07 – 1:35` ★ MULTIMODAL ★
+### 🎬 Scene 6 — Telegram: Gemini Vision `1:07 – 1:30` ★ MULTIMODAL ★
 
 **Screen:** Cut to Telegram on phone (vertical, centered in frame).
 User sends a photo — clinical anatomy diagram of the knee.
 Caption: **「這是什麼結構？」**
 
 **Narration:**
-> "Now — beyond the text box. The same system runs as a Telegram bot. I send a photo from my anatomy textbook — a clinical diagram of the knee — and ask what it shows. Gemini's multimodal Vision API handles this."
+> "The same system runs as a Telegram bot. I send a photo from my anatomy textbook and ask what it shows. Gemini's multimodal Vision API handles this."
 
-**Subtitle:** 超越文字框架。傳送教科書解剖圖，詢問圖中結構——由 Gemini 多模態視覺 API 處理。
+**Subtitle:** 同一系統也作為 Telegram 機器人運行。傳送教科書解剖圖——由 Gemini 多模態視覺 API 處理。
 
 ---
 
 **Screen:** Bot reply appears:
 
 ```
-[Vision Agent · Gemini 2.0 Flash · Confidence: 87%]
+[Vision Agent · Gemini 2.5 Flash · Confidence: 87%]
 
 圖中顯示右膝關節矢狀面切面，可識別以下結構：
 
@@ -171,74 +171,142 @@ Caption: **「這是什麼結構？」**
 ```
 
 **Narration:**
-> "Gemini's multimodal API identifies the anatomical structures, labels them in Traditional Chinese — the user's language — adds clinical function descriptions, and returns a confidence score. Text in, image in — rich structured output."
+> "Gemini identifies the anatomical structures, labels them in Traditional Chinese, and adds clinical function descriptions. Text in, image in — rich structured output."
 
-**Subtitle:** Gemini 多模態 API 識別解剖結構，以繁體中文回應，加上臨床功能說明。文字輸入、圖像輸入——輸出豐富的結構化內容。
+**Subtitle:** Gemini 識別解剖結構，以繁體中文回應，加上臨床功能說明。文字輸入、圖像輸入——輸出豐富的結構化內容。
 
 ---
 
-### 🎬 Scene 7 — Architecture `1:35 – 1:50`
+### 🎬 Scene 7 — Gemini Creates: Exam Questions from Memory `1:30 – 2:05` ★ CREATIVE STORYTELLER ★
+
+**Screen:** Return to same chat session from Scene 5 (orthopedics notes saved).
+Cursor moves to input field.
+
+**Narration:**
+> "Now — the creative moment. I don't just store notes. I ask Gemini to turn them into something entirely new."
+
+**Subtitle:** 現在是創作時刻。我不只是儲存筆記——我讓 Gemini 將它們轉化成全新的東西。
+
+---
+
+**Screen:** User types:
+
+```
+從我剛存的骨科筆記出5道考試題目
+```
+
+Analysis Log:
+```
+◈  received: 從我剛存的骨科筆記出5道考試題目
+→  routing: study_notes + reasoning_agent
+✓  retrieved: notes from subject='orthopedics'
+✎  generating: exam questions via Gemini...
+```
+
+Response streams in:
+
+```
+📝 骨科考試題目（共 5 題）
+
+【1】關於旋轉肌群（Rotator Cuff），下列何者正確？
+  A) 由四條肌肉組成
+  B) 棘上肌負責內旋
+  C) 受傷後無法保守治療
+  D) 與三角肌無關
+  答案：A
+
+【2】前十字韌帶（ACL）損傷後，手術最佳時機為何？
+  A) 立即手術（24小時內）
+  B) 急性期消腫後（3–6週）
+  C) 1年後
+  D) 不需手術
+  答案：B
+...
+```
+
+Hold 4 seconds. Camera slowly pans down the questions.
+
+**Narration:**
+> "Gemini reads my saved orthopedics notes — the PubMed papers I stored moments ago — and generates five clinical exam questions in Traditional Chinese. Multiple choice, correct answers, clinical reasoning baked in. Text in, image in, knowledge in — original content out. This is the Creative Storyteller."
+
+**Subtitle:** Gemini 讀取我剛儲存的骨科筆記，生成五道繁體中文臨床考題，附正確答案與臨床推理。文字輸入、圖像輸入、知識輸入——原創內容輸出。這就是 Creative Storyteller。
+
+---
+
+### 🎬 Scene 8 — Architecture `2:05 – 2:20`
 
 **Screen:** Smooth fade to architecture diagram (animated, cyan on dark).
 
 Each layer illuminates in sequence:
 
 ```
-   ┌──────── INTERFACES ─────────────────┐
-   │  Web UI · Telegram Bot · REST API   │
-   └──────────────┬──────────────────────┘
+   ┌──────── INPUT MODALITIES ────────────────────────┐
+   │  Text (Web/Telegram) · Image (Telegram Vision)   │
+   └──────────────┬───────────────────────────────────┘
                   │
-   ┌──────────────▼──────────────────────┐
-   │        TOKEN BUDGET CONTROLLER      │  ← 50,000 tokens/day
-   └──────────────┬──────────────────────┘
+   ┌──────────────▼───────────────────────────────────┐
+   │        TOKEN BUDGET CONTROLLER                   │  ← 50,000 tokens/day
+   └──────────────┬───────────────────────────────────┘
                   │
-   ┌──────────────▼──────────────────────┐
-   │     ORCHESTRATOR + 4-LAYER MEMORY   │
-   └──────┬───────────────────┬──────────┘
-          │                   │
-   ┌──────▼──────┐   ┌────────▼──────┐
-   │  9 AGENTS   │   │  22 SKILLS    │
-   └─────────────┘   └───────────────┘
+   ┌──────────────▼───────────────────────────────────┐
+   │     ORCHESTRATOR + 5-LAYER MEMORY                │
+   └──────┬────────────────────┬─────────────────────┘
+          │                    │
+   ┌──────▼──────┐   ┌─────────▼──────┐
+   │  9 AGENTS   │   │  24 SKILLS     │
+   └─────────────┘   └────────────────┘
           │
-   ┌──────▼──────────────────────────────┐
-   │  Gemini 2.0 Flash · Google GenAI SDK│
-   └──────────────────────────────────────┘
+   ┌──────▼───────────────────────────────────────────┐
+   │  Gemini 2.5 Flash · Google GenAI SDK             │
+   │  Vision · Embedding · Generation                 │
+   └──────────────────────────────────────────────────┘
           │
-   ┌──────▼──────────────────────────────┐
-   │  Google Cloud Run                   │
-   └──────────────────────────────────────┘
+   ┌──────▼───────────────────────────────────────────┐
+   ┌──────── OUTPUT MODALITIES ───────────────────────┐
+   │  Structured text · Citation cards · Exam Qs      │
+   │  Anatomy analysis · Telegram push · Dashboard    │
+   └──────────────────────────────────────────────────┘
+          │
+   ┌──────▼───────────────────────────────────────────┐
+   │  Google Cloud Run (asia-east1)                   │
+   └──────────────────────────────────────────────────┘
 ```
 
 **Narration:**
-> "Under the hood: FastAPI, WebSocket, a hard token budget controller, nine specialist agents, twenty-two skills with three-layer NLP routing, and a four-layer memory system. All intelligence flows through Gemini 2.0 Flash via Google GenAI SDK. Deployed on Google Cloud Run."
+> "Under the hood: multiple input modalities — text and image — flow through nine specialist agents and twenty-four skills, powered by Gemini 2.5 Flash. The output is equally varied: structured citation cards, anatomy analysis, clinical exam questions, Telegram push notifications. Input is anything. Output is everything."
 
-**Subtitle:** 底層架構：FastAPI、WebSocket、Token 預算控制、九個代理人、二十二項技能三層路由、四層記憶體系統。所有智能通過 Gemini 2.0 Flash 處理。部署於 Google Cloud Run。
+**Subtitle:** 底層架構：多種輸入模態——文字與圖像——流經九個代理人、二十四項技能，由 Gemini 2.5 Flash 驅動。輸出同樣多元：引用卡片、解剖分析、考試題目、Telegram 推播。輸入是任何東西，輸出是一切。
 
 ---
 
-### 🎬 Scene 8 — Closing `1:50 – 2:10`
+### 🎬 Scene 9 — Closing `2:20 – 2:50`
 
-**Screen:** Return to Dashboard. The Nexus Core SVG glows — hexagons rotating, orbital dots alive.
-Status: **ONLINE · 9 AGENTS · 22 SKILLS · GEMINI: ACTIVE**
+**Screen:** Slow montage — 3 seconds each:
+1. The exam questions from Scene 7 (Gemini-generated content)
+2. The anatomy analysis from Scene 6 (image → structured Chinese)
+3. The PubMed citation cards from Scene 4 (text → research)
+Then cut to Dashboard — Nexus Core SVG glows, hexagons rotating, orbital dots alive.
+Status: **ONLINE · 9 AGENTS · 24 SKILLS · GEMINI: ACTIVE**
 
-Final title card:
+Final title card (fade in, hold 5 seconds, fade to black):
 
 ```
 NEXUS AI
 
 Multi-Agent Personal Intelligence System
-Powered by Gemini 2.0 Flash · Google GenAI SDK
+Gemini 2.5 Flash · Google GenAI SDK · Google Cloud Run
 
 Gemini Live Agent Challenge 2026
-Creative Storytellers Track
+Creative Storyteller Track
 
+nexus-ai-758633716956.asia-east1.run.app
 github.com/xushuowen/nexus-ai
 ```
 
 **Narration:**
-> "Nexus isn't a prototype. It's a system I use every single day — for literature review, for clinical notes, for exam prep, for scheduling. Built to go beyond the text box. Powered by Gemini."
+> "Nexus isn't a prototype. It's a system I use every single day — for literature review, for clinical notes, for exam prep. Text in. Image in. Knowledge in. Rich, structured, multilingual content out. Built to go beyond the text box. Powered by Gemini."
 
-**Subtitle:** Nexus 不是原型，是我每天真實使用的系統。突破文字框架，由 Gemini 驅動。
+**Subtitle:** Nexus 不是原型，是我每天真實使用的系統。文字輸入、圖像輸入、知識輸入。豐富、結構化、多語言的內容輸出。突破文字框架，由 Gemini 驅動。
 
 ---
 
@@ -249,7 +317,7 @@ github.com/xushuowen/nexus-ai
 - Hold title card for 2 full seconds before transition
 
 ### Scene 2 (0:08–0:20) — Dashboard
-- Open `localhost:8001/dashboard` fresh (no pre-loaded data)
+- Open `localhost:8000/dashboard` fresh (no pre-loaded data)
 - Click **技能演化** tab and wait for D3.js force simulation to settle (~3 sec)
 - Pan: left stat panel → sweep right to D3 graph
 
@@ -267,19 +335,27 @@ github.com/xushuowen/nexus-ai
 - Continue same chat session (no page reload)
 - Show `"骨科" → orthopedics` detection in routing trace
 
-### Scene 6 (1:07–1:35) — Telegram Vision ★ MULTIMODAL ★
+### Scene 6 (1:07–1:30) — Telegram Vision ★ MULTIMODAL ★
 - Use actual phone, not emulator
 - Send a real knee anatomy diagram (sagittal section works well)
 - Allow ~10 sec for Gemini vision response
 - Frame: portrait phone, held steady or on stand
-- This scene demonstrates the **"beyond text box"** requirement — do not cut short
 
-### Scene 7 (1:35–1:50) — Architecture
-- Animate each layer lighting up with 0.5s delay
+### Scene 7 (1:30–2:05) — Exam Generation ★ CREATIVE STORYTELLER ★
+- Continue SAME chat session from Scene 5 — no page reload, shows persistent context
+- Type slowly: 「從我剛存的骨科筆記出5道考試題目」
+- Analysis Log must show `study_notes + reasoning_agent` routing trace — this shows multimodal pipeline
+- **Hold on each generated question** — let judges read the clinical content
+- Camera slowly pans down the question list — 4 full seconds minimum
+- This scene is the emotional climax: stored knowledge → original creative output
+
+### Scene 8 (2:05–2:20) — Architecture
+- Animate INPUT layer first, then OUTPUT layer last — bookend the multimodal story
 - Show "Google Cloud Run" at bottom clearly — judges require Cloud deployment proof
 
-### Scene 8 (1:50–2:10) — Closing
-- Return to live dashboard — still active from earlier scenes
+### Scene 9 (2:20–2:50) — Closing
+- Montage of 3 outputs: exam questions → anatomy analysis → PubMed cards (3 sec each)
+- Then dashboard — show the system is live and complete
 - Final card: fade-in, hold 5 seconds, fade to black
 
 ---
@@ -290,22 +366,23 @@ github.com/xushuowen/nexus-ai
 |------|--------|
 | Server | `python run.py` — verify `/api/status` returns `"init_complete": true` |
 | Telegram | Bot must be running (`TELEGRAM_BOT_TOKEN` set) |
-| Anatomy image | Prepare a clear knee sagittal section diagram |
-| Test query | Pre-run ACL query once to warm cache |
+| Anatomy image | Prepare a clear knee sagittal section diagram (sagittal view works best) |
+| Test queries | Pre-run ACL query + exam generation once to warm cache |
 | Screen | Clean browser, no tabs visible, zoom 100% |
 | Browser | Full-screen, DevTools closed |
-| Mic | Record narration separately, merge in post |
+| Narration | Record narration separately, merge in post |
 
 ---
 
 ## Key Talking Points (for Devpost description / Q&A)
 
-1. **Gemini 2.0 Flash** — every agent call uses Google GenAI SDK (`gemini-2.0-flash`)
-2. **Multimodal vision** — Telegram image → Gemini vision API → Traditional Chinese anatomical description
-3. **Beyond text box** — input is text OR image; output is structured mixed content
-4. **No hardcoded routing** — Gemini scores all 9 agents dynamically per request
-5. **MeSH vocabulary** — PT-domain medical term expansion via Gemini
-6. **Token budget** — 50,000/day hard cap, never exceeds free tier
-7. **4-layer memory** — working (7 slots) → episodic (SQLite) → semantic (ChromaDB) → procedural cache
-8. **Google Cloud Run** — containerized deployment with documented proof
-9. **Responsible AI** — filesystem sandbox, SSRF protection, rate limiter, local data only
+1. **Multimodal input** — text (chat) AND image (Telegram anatomy diagrams) both go through Gemini 2.5 Flash
+2. **Multimodal output** — structured citation cards, Traditional Chinese anatomy analysis, generated exam questions, Telegram push — all from one system
+3. **Creative generation** — Gemini transforms stored notes into original exam questions: stored knowledge → new content
+4. **PT domain expertise** — MeSH vocabulary expansion for 30+ PT terms; `search_medical_papers()` hits NCBI PubMed E-utilities directly
+5. **Gemini 2.5 Flash** — every agent call uses Google GenAI SDK (`gemini-2.5-flash`); Vision API for image analysis; Embedding API for semantic memory
+6. **No hardcoded routing** — Gemini scores all 9 agents dynamically per request via 3-layer NLP
+7. **5-layer memory** — working → episodic (SQLite FTS5) → semantic (Gemini Embedding) → procedural → PyramidMemory (LLM long-term compression)
+8. **Token budget** — 50,000/day hard cap, never exceeds free tier
+9. **Google Cloud Run** — containerized deployment, live at nexus-ai-758633716956.asia-east1.run.app
+10. **Responsible AI** — filesystem sandbox, SSRF protection, rate limiter, 5-sec code timeout

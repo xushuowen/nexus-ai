@@ -3,7 +3,7 @@ app:
   name: "Nexus AI"
   version: "0.1.0"
   host: "0.0.0.0"
-  port: 8001
+  port: 8000
   debug: false
 
 budget:
@@ -31,7 +31,9 @@ orchestrator:
   simple_question_threshold: 0.85
 
 providers:
+  brain_mode: "gemini"   # "gemini" | "gemini_web" | "local" | "auto"
   primary: "gemini-flash"
+  local_primary: "phi3-vision"
   fallback: "groq-llama"
   models:
     gemini-flash:
@@ -45,7 +47,8 @@ providers:
       temperature: 0.7
       use_for: ["complex_reasoning", "code_generation"]
     gemini-vision:
-      model_id: "gemini/gemini-2.0-flash"
+      model_id: "openai/gpt-4o-mini"
+      api_base: "https://models.inference.ai.azure.com"
       max_tokens: 4096
       temperature: 0.7
       use_for: ["vision"]
@@ -60,6 +63,24 @@ providers:
       max_tokens: 2000
       temperature: 0.7
       use_for: ["fallback"]
+    phi3-vision:
+      model_id: "local/phi3-vision"
+      max_tokens: 512
+      temperature: 0.7
+      use_for: ["local_chat", "local_vision"]
+      model_path: "./models/llava-phi-3-mini-int4.gguf"
+      mmproj_path: "./models/llava-phi-3-mini-mmproj-f16.gguf"
+      n_threads: 4
+      n_ctx: 4096
+
+pyramid_memory:
+  enabled: true
+  db_path: "./data/pyramid.db"
+  compression_interval_hours: 6
+  daily_min_messages: 3        # min messages to trigger tier1 compression
+  monthly_min_days: 3          # min daily summaries to trigger tier2
+  context_max_chars: 8000
+  retention_tier1_days: 90
 
 security:
   sandbox_enabled: true

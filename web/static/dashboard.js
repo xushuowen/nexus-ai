@@ -8,6 +8,7 @@ const SKILL_CATEGORIES = {
     productivity: { label: '生產力', color: '#ff9a3c', emoji: '◆' },
     tools:        { label: '工具',   color: '#aa66ff', emoji: '◇' },
     system:       { label: '系統',   color: '#ffd700', emoji: '✦' },
+    vision:       { label: '視覺 AI', color: '#ff6eb4', emoji: '◉' },
     general:      { label: '其他',   color: '#8ab4d8', emoji: '○' },
 };
 
@@ -41,6 +42,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setupTabs();
     fetchDashboard();
     setInterval(fetchDashboard, 30000);
+    fetchConnections();
+    setInterval(fetchConnections, 60000);
     setupGraphResizeObserver();
     // Chat module init
     setText('d-session-id', dSessionId.slice(-6));
@@ -52,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const sendBtn = document.getElementById('d-send-btn');
     if (sendBtn) sendBtn.addEventListener('click', dSendMessage);
+    dInitVoice();
     // Start WebSocket immediately so it's ready when user opens chat tab
     dConnectWs();
 });
@@ -70,15 +74,81 @@ async function fetchDashboard() {
     }
 }
 
+// ─── Token Vault: Connected Services ────────────────────
+async function fetchConnections() {
+    const token = localStorage.getItem('nexus_auth_token');
+    const el = document.getElementById('connections-list');
+    if (!el) return;
+
+    if (!token) {
+        el.innerHTML = '<div style="opacity:.4;font-size:10px">Not logged in — <a href="/auth/login" style="color:#00d4ff">Connect via Auth0</a></div>';
+        return;
+    }
+
+    try {
+        const r = await fetch('/api/auth/connections', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!r.ok) return;
+        const data = await r.json();
+
+        if (!data.auth0_configured) {
+            el.innerHTML = '<div style="opacity:.4;font-size:10px">Auth0 not configured</div>';
+            return;
+        }
+        if (data.error) {
+            el.innerHTML = `<div style="opacity:.4;font-size:10px">${data.error} — <a href="/auth/login" style="color:#00d4ff">Login</a></div>`;
+            return;
+        }
+
+        const rows = data.connections.map(c => {
+            const dot  = c.connected ? '🟢' : '⚪';
+            const label = c.connected ? `<span style="color:#00ffaa">${c.name}</span>` : `<span style="opacity:.4">${c.name}</span>`;
+            return `<div>${dot} ${label}</div>`;
+        }).join('');
+
+        const logoutLink = '<div style="margin-top:6px"><a href="/auth/logout" style="color:#ff6b6b;font-size:9px">Disconnect</a></div>';
+        el.innerHTML = rows + logoutLink;
+    } catch (e) {
+        console.warn('Connections fetch error:', e);
+    }
+}
+
+// ─── Brain Mode ─────────────────────────────────────────
+async function setBrain(mode) {
+    const apiKey = window.__NEXUS_API_KEY || '';
+    const headers = { 'Content-Type': 'application/json', ...(apiKey ? { 'X-API-Key': apiKey } : {}) };
+    try {
+        const r = await fetch('/api/brain', { method: 'POST', headers, body: JSON.stringify({ mode }) });
+        const d = await r.json();
+        updateBrainUI(d.brain_mode, d.brain);
+    } catch (e) { console.warn('Brain switch error:', e); }
+}
+
+function updateBrainUI(mode, active) {
+    ['auto', 'gemini', 'local'].forEach(m => {
+        const btn = document.getElementById('brain-' + m);
+        if (btn) btn.style.opacity = m === mode ? '1' : '0.4';
+    });
+    const el = document.getElementById('brain-active');
+    if (el) {
+        const labels = { gemini: '☁ Gemini（比賽模式）', local: '💾 本地離線', auto: '⚡ 自動' };
+        el.textContent = (labels[active] || active) + (mode === 'auto' ? ' (自動)' : '');
+    }
+}
+
 // ─── Update UI ──────────────────────────────────────────
 function updateMainPanel(data) {
+    // Brain mode
+    if (data.brain_mode !== undefined) updateBrainUI(data.brain_mode, data.brain || data.brain_mode);
+
     // Online badge
     const isReady = data.status === 'operational';
     const onlineText = document.getElementById('dash-online-text');
     onlineText.textContent = isReady ? 'ONLINE' : 'INITIALIZING';
 
     // System stats
-    setText('sys-agents', data.agents?.length ?? '—');
+    setText('sys-agents', data.agents ? data.agents.length + 1 : '—'); // +1 for EasyOCR
     setText('sys-skills',  data.skills?.length  ?? '—');
     setText('sys-reqs',    data.budget?.request_count ?? '—');
 
@@ -304,6 +374,19 @@ function renderSkillGraph(skills) {
         });
     });
 
+    // ─── Vision Agent pipeline nodes (hardcoded) ──────
+    const VC = SKILL_CATEGORIES.vision.color; // '#ff6eb4'
+    nodes.push({ id: 'cat_vision',    label: '視覺 AI',      type: 'category', color: VC,        r: 18, catKey: 'vision' });
+    nodes.push({ id: 'VisionAgent',   label: 'VisionAgent',  type: 'skill',    color: VC,        r: 13, catKey: 'vision', desc: 'Multimodal image analysis' });
+    nodes.push({ id: 'EasyOCR',       label: 'EasyOCR',      type: 'skill',    color: '#ffb347', r: 10, catKey: 'vision', desc: 'Local OCR — Traditional Chinese + EN' });
+    nodes.push({ id: 'Groq',          label: 'Groq LLM',     type: 'skill',    color: '#00d4aa', r: 10, catKey: 'vision', desc: 'Fast text analysis (no quota)' });
+    nodes.push({ id: 'GeminiVision',  label: 'Gemini Vision',type: 'skill',    color: '#aaaaff', r: 10, catKey: 'vision', desc: 'Visual fallback for X-ray / photos' });
+    links.push({ source: '__core',     target: 'cat_vision',   dist: 120, strength: 0.25 });
+    links.push({ source: 'cat_vision', target: 'VisionAgent',  dist: 75,  strength: 0.5  });
+    links.push({ source: 'VisionAgent',target: 'EasyOCR',      dist: 65,  strength: 0.55 });
+    links.push({ source: 'EasyOCR',    target: 'Groq',         dist: 55,  strength: 0.7, pipeline: true, pipelineColor: '#ffb347' });
+    links.push({ source: 'VisionAgent',target: 'GeminiVision', dist: 70,  strength: 0.45 });
+
     // Render sidebar
     renderSkillSidebar(catGroups);
 
@@ -324,11 +407,13 @@ function renderSkillGraph(skills) {
     const linkSel = svg.append('g').attr('class', 'links')
         .selectAll('line').data(links).join('line')
         .attr('stroke', d => {
+            if (d.pipeline) return d.pipelineColor || '#ffb347';
             const t = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
             return t?.color || '#336';
         })
-        .attr('stroke-opacity', 0.25)
-        .attr('stroke-width', 1);
+        .attr('stroke-opacity', d => d.pipeline ? 0.75 : 0.25)
+        .attr('stroke-width',   d => d.pipeline ? 2 : 1)
+        .attr('stroke-dasharray', d => d.pipeline ? '4 3' : null);
 
     // ─── Nodes ────────────────────────────────────────
     const nodeSel = svg.append('g').attr('class', 'nodes')
@@ -538,6 +623,7 @@ let dSessionId = 'ds_' + Date.now();
 let dIsProcessing = false;
 let dMsgCount = 0;
 let dWsReady = false;
+let dPendingImagePath = '';
 
 // (chat input listener and WS init merged into main DOMContentLoaded above)
 
@@ -728,19 +814,53 @@ function dFormatMsg(text) {
 function dSendMessage() {
     const input = document.getElementById('d-user-input');
     const text  = (input?.value ?? '').trim();
-    if (!text || dIsProcessing) return;
+    if ((!text && !dPendingImagePath) || dIsProcessing) return;
 
-    dAddUserMsg(text);
+    dAddUserMsg((dPendingImagePath ? '🖼 ' : '') + (text || '（圖片分析）'));
     dSetProcessing(true);
     input.value = '';
 
+    const imagePath = dPendingImagePath;
+    if (imagePath) dClearImage();
+
     if (dWs && dWs.readyState === WebSocket.OPEN) {
-        dWs.send(JSON.stringify({ content: text, session_id: dSessionId }));
+        dWs.send(JSON.stringify({ content: text || '請分析這張圖片', session_id: dSessionId, image_path: imagePath }));
     } else {
         dAddAssistantMsg('Neural link disconnected. Reconnecting...');
         dSetProcessing(false);
         dConnectWs();
     }
+}
+
+// ─── Image upload ──────────────────────────────────────────
+async function dHandleImageSelect(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const form = new FormData();
+    form.append('file', file);
+    try {
+        const res = await fetch('/api/upload', { method: 'POST', body: form });
+        const data = await res.json();
+        if (data.path) {
+            dPendingImagePath = data.path;
+            document.getElementById('d-img-preview-name').textContent = '📎 ' + file.name;
+            document.getElementById('d-img-preview').classList.remove('hidden');
+            document.getElementById('d-upload-btn').classList.add('has-image');
+            dThink('🖼', '圖片已上傳：' + file.name, 'selected');
+        } else {
+            dThink('✖', data.error || '上傳失敗', 'error');
+        }
+    } catch (e) {
+        dThink('✖', '上傳錯誤：' + e.message, 'error');
+    }
+    input.value = '';
+}
+
+function dClearImage() {
+    dPendingImagePath = '';
+    document.getElementById('d-img-preview').classList.add('hidden');
+    document.getElementById('d-img-preview-name').textContent = '';
+    document.getElementById('d-upload-btn').classList.remove('has-image');
 }
 
 // ─── Processing state ─────────────────────────────────────
@@ -754,4 +874,55 @@ function dSetProcessing(state) {
         const inp = document.getElementById('d-user-input');
         if (inp) inp.focus();
     }
+}
+
+// ─── Voice Input ────────────────────────────────────────────
+let _dRecognition = null;
+let _dListening = false;
+
+function dInitVoice() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const btn = document.getElementById('d-mic-btn');
+    if (!SpeechRecognition || !btn) return;
+
+    _dRecognition = new SpeechRecognition();
+    _dRecognition.continuous = false;
+    _dRecognition.interimResults = true;
+    _dRecognition.lang = dDetectLang();
+
+    _dRecognition.onstart = () => {
+        _dListening = true;
+        btn.classList.add('listening');
+    };
+    _dRecognition.onend = () => {
+        _dListening = false;
+        btn.classList.remove('listening');
+    };
+    _dRecognition.onresult = (e) => {
+        const inp = document.getElementById('d-user-input');
+        if (!inp) return;
+        let transcript = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+            transcript += e.results[i][0].transcript;
+        }
+        inp.value = transcript;
+        if (e.results[e.results.length - 1].isFinal) {
+            setTimeout(() => dSendMessage(), 300);
+        }
+    };
+
+    btn.addEventListener('click', () => {
+        if (_dListening) {
+            _dRecognition.stop();
+        } else {
+            _dRecognition.lang = dDetectLang();
+            _dRecognition.start();
+        }
+    });
+}
+
+function dDetectLang() {
+    const inp = document.getElementById('d-user-input');
+    if (!inp) return 'zh-TW';
+    return /[\u4e00-\u9fff]/.test(inp.value) ? 'zh-TW' : 'en-US';
 }

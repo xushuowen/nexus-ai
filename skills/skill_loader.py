@@ -43,15 +43,24 @@ class SkillLoader:
     def match(self, text: str) -> BaseSkill | None:
         """Find the best matching skill for input text (Level 1 matching).
 
-        Returns the highest-scoring skill, or None if no skill scores >= 1.
-        When scores tie, prefer the skill with more triggers matched.
+        Threshold rules (CJK-aware):
+        - Short queries (≤6 approx tokens): score >= 1 is enough
+        - Long queries (>6 approx tokens): score >= 2 required to avoid false positives
+        - Ties (top-2 same score AND same trigger_hits): return None — let agent routing handle it
         """
-        scores: list[tuple[int, int, BaseSkill]] = []
+        import re
         text_lower = text.lower()
+
+        # CJK-aware word count (same heuristic as orchestrator._detect_specialist)
+        cjk_chars = len(re.findall(r'[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7ff]', text))
+        ascii_words = len(text.split())
+        approx_tokens = max(cjk_chars, ascii_words)
+        threshold = 1 if approx_tokens <= 6 else 2
+
+        scores: list[tuple[float, int, BaseSkill]] = []
         for skill in self._skills.values():
             score = skill.match_score(text)
-            if score >= 1:
-                # Secondary: count raw trigger hits for tie-breaking
+            if score >= threshold:
                 trigger_hits = sum(
                     1 for t in skill.triggers
                     if skill._trigger_matches(t.lower(), text_lower)
@@ -60,8 +69,14 @@ class SkillLoader:
 
         if not scores:
             return None
+
         # Sort by (score desc, trigger_hits desc)
         scores.sort(key=lambda x: (x[0], x[1]), reverse=True)
+
+        # Ambiguous tie: top-2 have identical score+hits → let agent routing decide
+        if len(scores) >= 2 and scores[0][0] == scores[1][0] and scores[0][1] == scores[1][1]:
+            return None
+
         return scores[0][2]
 
     def top_matches(self, text: str, n: int = 3) -> list[tuple[BaseSkill, int]]:

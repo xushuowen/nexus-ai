@@ -38,6 +38,7 @@ class BaseSkill(ABC):
     description: str = "Base skill"
     triggers: list[str] = []          # Keywords that activate this skill
     intent_patterns: list[str] = []   # Regex patterns for intent matching
+    synonyms: dict[str, list[str]] = {}  # Extra aliases: {"trigger": ["alias1", "alias2"]}
     category: str = "general"
     requires_llm: bool = False        # Whether this skill needs LLM to run
 
@@ -49,29 +50,42 @@ class BaseSkill(ABC):
     def _trigger_matches(trigger: str, text_lower: str) -> bool:
         """Match trigger against lowercased text.
 
-        ASCII triggers use word-boundary matching to avoid false positives
-        (e.g. 'note' inside 'annotate').  CJK/mixed triggers fall back to
-        simple substring search because \b doesn't work for CJK characters.
+        ASCII triggers: word-boundary matching to avoid false positives
+        (e.g. 'note' inside 'annotate').
+        CJK/mixed triggers: substring search; short CJK triggers (≤2 chars)
+        also require a non-CJK boundary or start/end to reduce noise.
         """
         if re.match(r'^[a-z0-9 _-]+$', trigger):
             return bool(re.search(r'\b' + re.escape(trigger) + r'\b', text_lower))
+        # Short CJK triggers (≤2 chars) — guard against embedded false matches
+        if len(trigger) <= 2 and re.match(r'^[\u4e00-\u9fff]+$', trigger):
+            # Prefer boundary match (preceded/followed by non-CJK or start/end)
+            pat = r'(?:^|(?<=\W))' + re.escape(trigger) + r'(?=\W|$)'
+            return bool(re.search(pat, text_lower)) or trigger in text_lower
         return trigger in text_lower
 
-    def match_score(self, text: str) -> int:
+    def match_score(self, text: str) -> float:
         """Level 1: Check how well input matches this skill's triggers or intent patterns.
 
         Scoring:
-        - Each matching trigger keyword = 1 point
-        - Each matching intent pattern = 1 point (all patterns counted, not just first)
-        - Higher score = higher routing priority when multiple skills are candidates
+        - Each matching trigger keyword: 1 + len*0.08 (longer = more specific = higher)
+        - Each matching synonym: 0.8 points
+        - Each matching intent pattern: 1.2 points (regex = more precise)
+        Returns a float but callers may cast to int; higher = better match.
         """
         text_lower = text.lower()
-        score = sum(1 for t in self.triggers if self._trigger_matches(t.lower(), text_lower))
-        # Count ALL matching intent patterns for better skill ranking
-        # (removed early break so multiple matches accumulate score)
+        score = 0.0
+        for t in self.triggers:
+            if self._trigger_matches(t.lower(), text_lower):
+                score += 1.0 + len(t) * 0.08
+            # Also check synonyms for this trigger
+            for alias in self.synonyms.get(t, []):
+                if self._trigger_matches(alias.lower(), text_lower):
+                    score += 0.8
+                    break  # count only once per trigger
         for pattern in self.intent_patterns:
             if re.search(pattern, text, re.IGNORECASE):
-                score += 1
+                score += 1.2
         return score
 
     def get_index(self) -> dict[str, str]:

@@ -6,18 +6,20 @@ let ws = null;
 let sessionId = 'session_' + Date.now();
 let isProcessing = false;
 let startTime = Date.now();
+let _pendingImagePath = '';
 
 // Agent/Skill definitions (SAO-style skill list)
 const SKILLS = [
-    { name: 'Coder',     icon: '&#xe2bf;', desc: 'Code generation & debug',     emoji: '\u2699' },
-    { name: 'Reasoning', icon: '&#xe1e0;', desc: 'Chain-of-thought logic',      emoji: '\u2727' },
-    { name: 'Research',  icon: '&#xe153;', desc: 'Web search & extraction',     emoji: '\u2741' },
-    { name: 'Knowledge', icon: '&#xe155;', desc: 'Knowledge graph queries',     emoji: '\u25C8' },
-    { name: 'File',      icon: '&#xe14e;', desc: 'File operations',             emoji: '\u2630' },
-    { name: 'Web',       icon: '&#xe157;', desc: 'Web browsing & scraping',     emoji: '\u2302' },
-    { name: 'Shell',     icon: '&#xe157;', desc: 'Sandboxed shell execution',   emoji: '\u276F' },
-    { name: 'Vision',    icon: '&#xe155;', desc: 'Image/PDF analysis',          emoji: '\u25CE' },
-    { name: 'Optimizer', icon: '&#xe1e0;', desc: 'Self-optimization engine',    emoji: '\u2726' },
+    { name: 'Coder',     icon: '&#xe2bf;', desc: 'Code generation & debug',          emoji: '\u2699' },
+    { name: 'Reasoning', icon: '&#xe1e0;', desc: 'Chain-of-thought logic',           emoji: '\u2727' },
+    { name: 'Research',  icon: '&#xe153;', desc: 'Web search & extraction',          emoji: '\u2741' },
+    { name: 'Knowledge', icon: '&#xe155;', desc: 'Knowledge graph queries',          emoji: '\u25C8' },
+    { name: 'File',      icon: '&#xe14e;', desc: 'File operations',                  emoji: '\u2630' },
+    { name: 'Web',       icon: '&#xe157;', desc: 'Web browsing & scraping',          emoji: '\u2302' },
+    { name: 'Shell',     icon: '&#xe157;', desc: 'Sandboxed shell execution',        emoji: '\u276F' },
+    { name: 'Vision',    icon: '&#xe155;', desc: 'Image & OCR analysis',             emoji: '\u25CE' },
+    { name: 'EasyOCR',   icon: '&#xe3f4;', desc: 'Local OCR · zh-TW + EN (offline)', emoji: '\u25A3' },
+    { name: 'Optimizer', icon: '&#xe1e0;', desc: 'Self-optimization engine',         emoji: '\u2726' },
 ];
 
 // ═══ Initialize ═══
@@ -27,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
     connectWebSocket();
     setupInput();
     startUptimeTimer();
+    initVoice();
     document.getElementById('session-id').textContent = sessionId.slice(-6);
 
     // Pre-fill from dashboard quick access (?q= param)
@@ -200,6 +203,7 @@ function handleEvent(data) {
             addAssistantMessage(content);
             setProcessing(false);
             clearActiveAgent();
+            speakResponse(content);
             break;
         case 'budget_status':
             try { updateBudget(JSON.parse(content)); } catch (e) {}
@@ -396,25 +400,216 @@ function setupInput() {
     });
 }
 
-function sendMessage() {
+async function sendMessage() {
     const input = document.getElementById('user-input');
     const text = input.value.trim();
-    if (!text || isProcessing) return;
+    if ((!text && !_pendingImagePath) || isProcessing) return;
 
-    addUserMessage(text);
+    const displayText = text || '（圖片分析）';
+    addUserMessage((_pendingImagePath ? '🖼 ' : '') + displayText);
     setProcessing(true);
     input.value = '';
 
+    // Upload image first if pending
+    let imagePath = '';
+    if (_pendingImagePath) {
+        imagePath = _pendingImagePath;
+        clearImage();
+    }
+
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
-            content: text,
+            content: text || '請分析這張圖片',
             session_id: sessionId,
+            image_path: imagePath,
         }));
     } else {
         addAssistantMessage('Neural link disconnected. Attempting to reconnect...');
         setProcessing(false);
         connectWebSocket();
     }
+}
+
+async function handleImageSelect(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const form = new FormData();
+    form.append('file', file);
+    try {
+        const res = await fetch('/api/upload', { method: 'POST', body: form });
+        const data = await res.json();
+        if (data.path) {
+            _pendingImagePath = data.path;
+            document.getElementById('img-preview-name').textContent = '📎 ' + file.name;
+            document.getElementById('img-preview').classList.remove('hidden');
+            document.getElementById('upload-btn').classList.add('has-image');
+            addThinkEntry('🖼', '圖片已上傳：' + file.name, 'selected');
+        } else {
+            addThinkEntry('✖', data.error || '上傳失敗', 'error');
+        }
+    } catch (e) {
+        addThinkEntry('✖', '上傳錯誤：' + e.message, 'error');
+    }
+    input.value = '';
+}
+
+function clearImage() {
+    _pendingImagePath = '';
+    document.getElementById('img-preview').classList.add('hidden');
+    document.getElementById('img-preview-name').textContent = '';
+    document.getElementById('upload-btn').classList.remove('has-image');
+}
+
+// ═══ Voice Input / TTS (Web Speech API) ═══
+let _recognition = null;
+let _ttsEnabled = true;
+let _ttsVoice = null;
+let _ttsHeartbeat = null;
+let _ttsPlaying = false;
+
+function initVoice() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const micBtn = document.getElementById('mic-btn');
+    const ttsBtn = document.getElementById('tts-btn');
+
+    // ── TTS voice preload (Chrome loads voices async) ──
+    function loadVoices() {
+        const voices = window.speechSynthesis.getVoices();
+        _ttsVoice = voices.find(v => v.lang === 'zh-TW' && v.localService)
+                 || voices.find(v => v.lang === 'zh-TW')
+                 || voices.find(v => v.lang.startsWith('zh'))
+                 || null;
+    }
+    loadVoices();
+    if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = loadVoices;
+
+    // ── TTS toggle button ──
+    if (ttsBtn) {
+        ttsBtn.addEventListener('click', () => {
+            _ttsEnabled = !_ttsEnabled;
+            ttsBtn.style.opacity = _ttsEnabled ? '1' : '0.35';
+            ttsBtn.title = _ttsEnabled ? '點擊關閉語音回覆' : '點擊開啟語音回覆';
+            if (!_ttsEnabled) stopTTS();
+        });
+    }
+
+    // ── STT setup ──
+    if (!SpeechRecognition) {
+        micBtn.title = '此瀏覽器不支援語音輸入（請用 Chrome）';
+        micBtn.style.opacity = '0.3';
+        micBtn.style.cursor = 'not-allowed';
+        return;
+    }
+
+    _recognition = new SpeechRecognition();
+    _recognition.lang = 'zh-TW';
+    _recognition.continuous = false;
+    _recognition.interimResults = true;
+
+    _recognition.onresult = (e) => {
+        const input = document.getElementById('user-input');
+        let interim = '', final = '';
+        for (const r of e.results) {
+            if (r.isFinal) final += r[0].transcript;
+            else interim += r[0].transcript;
+        }
+        input.value = final || interim;
+    };
+
+    _recognition.onend = () => {
+        micBtn.classList.remove('listening');
+        const input = document.getElementById('user-input');
+        // Small delay to let final result settle before sending
+        setTimeout(() => {
+            if (input.value.trim()) {
+                addThinkEntry('🎤', '語音輸入：' + input.value.trim(), 'routing');
+                sendMessage();
+            }
+        }, 150);
+    };
+
+    _recognition.onerror = (e) => {
+        micBtn.classList.remove('listening');
+        if (e.error !== 'no-speech') {
+            addThinkEntry('✖', '語音錯誤：' + e.error, 'error');
+        }
+    };
+
+    micBtn.addEventListener('click', () => {
+        if (micBtn.classList.contains('listening')) {
+            _recognition.stop();
+            micBtn.classList.remove('listening');
+        } else {
+            // Stop TTS before listening (prevents mic picking up AI voice)
+            stopTTS();
+            _recognition.lang = detectLang();
+            _recognition.start();
+            micBtn.classList.add('listening');
+            addThinkEntry('🎤', '聆聽中... 說完後自動送出', 'routing');
+        }
+    });
+}
+
+function detectLang() {
+    const last = document.getElementById('user-input').value;
+    if (/[a-zA-Z]{3,}/.test(last)) return 'en-US';
+    return 'zh-TW';
+}
+
+function stopTTS() {
+    if (_ttsHeartbeat) { clearInterval(_ttsHeartbeat); _ttsHeartbeat = null; }
+    _ttsPlaying = false;
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+}
+
+// TTS: speak AI response aloud
+function speakResponse(text) {
+    if (!_ttsEnabled || !window.speechSynthesis) return;
+
+    // Strip markdown
+    const clean = text
+        .replace(/```[\s\S]*?```/g, '程式碼略')
+        .replace(/\*\*(.+?)\*\*/g, '$1')
+        .replace(/`(.+?)`/g, '$1')
+        .replace(/^#+\s+/gm, '')
+        .replace(/\n+/g, '。')
+        .trim();
+
+    // Trim at sentence boundary near 220 chars (avoid cutting mid-word)
+    let speakText = clean;
+    if (clean.length > 220) {
+        const segment = clean.slice(0, 260);
+        const lastPunct = Math.max(
+            segment.lastIndexOf('。'), segment.lastIndexOf('！'),
+            segment.lastIndexOf('？'), segment.lastIndexOf('.',),
+            segment.lastIndexOf('!'),  segment.lastIndexOf('?')
+        );
+        speakText = lastPunct > 40 ? clean.slice(0, lastPunct + 1) : segment;
+    }
+
+    stopTTS();
+
+    const utt = new SpeechSynthesisUtterance(speakText);
+    utt.lang = /[\u4e00-\u9fff]/.test(speakText) ? 'zh-TW' : 'en-US';
+    utt.rate = 1.1;
+    if (_ttsVoice) utt.voice = _ttsVoice;
+
+    // Fix: Chrome TTS hangs after ~15s — heartbeat pause/resume keeps it alive
+    utt.onstart = () => {
+        _ttsPlaying = true;
+        _ttsHeartbeat = setInterval(() => {
+            if (window.speechSynthesis.speaking) {
+                window.speechSynthesis.pause();
+                window.speechSynthesis.resume();
+            }
+        }, 10000);
+    };
+    utt.onend = utt.onerror = () => {
+        if (_ttsHeartbeat) { clearInterval(_ttsHeartbeat); _ttsHeartbeat = null; }
+        _ttsPlaying = false;
+    };
+
+    window.speechSynthesis.speak(utt);
 }
 
 // ═══ Uptime Timer ═══

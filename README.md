@@ -454,7 +454,7 @@ nexus/
 <div align="center">
 
 **Gemini Live Agent Challenge 2026**
-Track: **Live Agents** · Google Agent Development Kit (ADK)
+Track: **Creative Storyteller** · Multimodal input/output with Gemini 2.5 Flash
 
 Nexus AI demonstrates production-grade multi-agent orchestration powered by **Gemini 2.5 Flash**, **Gemini Live API**, **Google GenAI SDK**, and **Google ADK**. It goes beyond text with:
 

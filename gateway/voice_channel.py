@@ -141,6 +141,7 @@ async def voice_websocket(ws: WebSocket):
         response_modalities=["AUDIO"],
         system_instruction=SYSTEM_PROMPT,
         tools=TOOLS,
+        input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
     )
 
@@ -208,9 +209,14 @@ async def voice_websocket(ws: WebSocket):
                                 )
                             await session.send_tool_response(function_responses=fn_responses)
 
-                        # Output audio transcription (text of what AI said)
+                        # Input audio transcription (what the user said — for display)
                         sc = getattr(response, "server_content", None)
                         if sc:
+                            it = getattr(sc, "input_transcription", None)
+                            if it and getattr(it, "text", None):
+                                await ws.send_text(json.dumps({"type": "user_text", "data": it.text}))
+
+                            # Output audio transcription (text of what AI said)
                             ot = getattr(sc, "output_transcription", None)
                             if ot and getattr(ot, "text", None):
                                 await ws.send_text(json.dumps({"type": "text", "data": ot.text}))

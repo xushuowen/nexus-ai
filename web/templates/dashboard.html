@@ -173,6 +173,14 @@
                             <button class="qa-btn" onclick="openChat('生成晨報')">生成晨報</button>
                         </div>
                     </div>
+
+                    <!-- ── Token Vault: Connected Services ── -->
+                    <div class="gp-section" id="section-connections">
+                        <div class="gp-title">CONNECTED SERVICES <span style="font-size:9px;opacity:.5">Token Vault</span></div>
+                        <div id="connections-list" style="font-size:11px;line-height:1.9">
+                            <div style="opacity:.4;font-size:10px">Not logged in — <a href="/auth/login" style="color:#00d4ff">Connect via Auth0</a></div>
+                        </div>
+                    </div>
                 </aside>
 
             </div>
@@ -208,11 +216,26 @@
                         <div class="input-frame">
                             <div class="input-glow"></div>
                             <textarea id="d-user-input" placeholder="Enter command..." rows="2"></textarea>
+                            <button id="d-upload-btn" title="上傳圖片" onclick="document.getElementById('d-img-input').click()">
+                                <svg viewBox="0 0 24 24" width="18" height="18">
+                                    <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" fill="currentColor"/>
+                                </svg>
+                            </button>
+                            <input type="file" id="d-img-input" accept="image/*" style="display:none" onchange="dHandleImageSelect(this)">
+                            <button id="d-mic-btn" title="按住說話" aria-label="語音輸入">
+                                <svg id="d-mic-icon" viewBox="0 0 24 24" width="18" height="18">
+                                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z" fill="currentColor"/>
+                                </svg>
+                            </button>
                             <button id="d-send-btn">
                                 <svg viewBox="0 0 24 24" width="20" height="20">
                                     <path d="M2 21l21-9L2 3v7l15 2-15 2z" fill="currentColor"/>
                                 </svg>
                             </button>
+                        </div>
+                        <div id="d-img-preview" class="hidden">
+                            <span id="d-img-preview-name"></span>
+                            <button onclick="dClearImage()" title="移除">✕</button>
                         </div>
                     </div>
                 </main>
@@ -232,7 +255,17 @@
                             </div>
                         </div>
 
-                        <div class="gp-title" style="margin-top:16px">SESSION</div>
+                        <div class="gp-title" style="margin-top:16px">大腦模式</div>
+                        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+                            <button class="brain-btn" id="brain-auto" onclick="setBrain('auto')">⚡ 自動</button>
+                            <button class="brain-btn" id="brain-gemini" onclick="setBrain('gemini')">☁ Gemini</button>
+                            <button class="brain-btn" id="brain-local" onclick="setBrain('local')">💾 本地</button>
+                        </div>
+                        <div style="font-size:11px;color:var(--muted);margin-bottom:14px">
+                            目前使用：<span id="brain-active" style="color:var(--accent)">載入中...</span>
+                        </div>
+
+                        <div class="gp-title" style="margin-top:4px">SESSION</div>
                         <div class="status-grid">
                             <div class="status-item">
                                 <span class="si-label">ID</span>
